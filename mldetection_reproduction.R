@@ -13,6 +13,10 @@ for (i in 1: length(packages)) {
 
 lapply(packages, library, character.only = T)
 
+#' source manual functions
+source("_functions.R")
+
+
 #' --------------------------------------
 #  --- 1. synthetic data creation -------
 #' --------------------------------------
@@ -103,7 +107,7 @@ lapply(packages, library, character.only = T)
                                 method="KL")
         print(val)
       
-      }
+      } # end optimization
       
       val_opt <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),]
     
@@ -149,15 +153,18 @@ lapply(packages, library, character.only = T)
         
         print(election)
         
-      }
+      } # end generate election data
      
-      # store one as example
-      clean <- clean.list[[1]]
+  } # end function gen_data
+
+
+  # store one as example
+  clean <- clean.list[[1]]
       
       
       ### also generell ist das jetzt einmal aufgesetzt
       ### mal schauen, ob das theoretischen bzw. empririschen Charakteristiken 
-      ### folgt. 
+      ### folgt. Fälle mit verschiedenen Fallzahlen und clean vs. fraud. 
      
       ### an sich muss man sagen, dass ich zur Zeit die p(turnout, vote share)
       ### distribution, die approxmiert werden soll, mit off-diagonals = 0
