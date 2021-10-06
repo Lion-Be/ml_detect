@@ -4,7 +4,7 @@
 #' -----------------------------------------------------------------------------
 
 #' install and load packages
-packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071")
+packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", "stringr")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -22,10 +22,11 @@ source("_functions.R")
 #' --------------------------------------
 
   # define function 
-  gen_data <- function(n_entities = 10000, turnout_mean = 0.7, turnout_sd = 0.1, 
+  gen_data <- function(n_entities = 1000, turnout_mean = 0.7, turnout_sd = 0.1, 
                        partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
                        partyB_sd = 0.1, fraud_type="clean", fraud_percA = 0, 
-                       fraud_percB = 0, n_elections, seed=12345) {  
+                       fraud_percB = 0, agg_factor = 1, n_elections = 1000, 
+                       seed = 12345) {  
     
     # n_entities = number of entities to create data for
     # turnout mean = mean turnout distribution
@@ -37,6 +38,9 @@ source("_functions.R")
     # fraud_type = type of fraud (clean, bbs, stealing, switching)
     # fraud_percA = overall perc of votes frauded in favor of partyA
     # fraud_percB = overall perc of votes frauded in favor of partyB
+    # agg_factor = aggregation factor, n_entities/agg_factor is the number
+    #              of entities data is aggregated towards
+    #              no aggregation for agg_factor = 1
     # n_elections = number of elections to generate 
   
     #' ----------------------------------------
@@ -109,10 +113,12 @@ source("_functions.R")
         KL_vec[val] <- normdiff(mu1 = mu_emp, sigma1 = vcov_emp,
                                 mu2 = mu_val, sigma2 = vcov_val,
                                 method="KL")
-        print(val)
-      
+        
+        if (val %% 1000 == 0)
+          print(str_c("optimization progress: ", val, " out of ", nrow(val_combs)))
+        
       } # end optimization
-      
+     
       val_opt <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),]
     
     
@@ -123,9 +129,9 @@ source("_functions.R")
       data_list <- list() # empty list for generated election dataframes
       for (election in 1:n_elections) {
       
-      # ----------------------
+      #'----------------------
       # clean election data
-      # ----------------------
+      #' ----------------------
       
         # generate variable following Benford's law
         X_a <- 10 ^ runif(n_entities, 0, 1) 
@@ -136,8 +142,8 @@ source("_functions.R")
         baseline_b <- val_opt[1, "baseline_b"]
         
         # latent support rates
-        l_support_a <- as.integer(baseline_a * X_a) 
-        l_support_b <- as.integer(baseline_b * X_b)
+        l_support_a <- round(baseline_a * X_a, digits = 0) 
+        l_support_b <- round(baseline_b * X_b, digits = 0)
         
         # construct vote totals from turnout distribution 
         turnout <- rtruncnorm(n_entities, 0, 1, turnout_mean, turnout_sd)
@@ -146,42 +152,121 @@ source("_functions.R")
         l_share_a <- l_support_a/(l_support_a+l_support_b)
         l_share_b <- 1-l_share_a
         
-        votes_all <- l_total * turnout
+        votes_all <- round(l_total * turnout, digits = 0)
         votes_a <- round(votes_all * l_share_a, digits = 0)
-        votes_b <- round(votes_all * l_share_b, digits = 0)  
+        votes_b <- votes_all - votes_a
     
         
-      # ----------------------
+      #' ----------------------
       # ballot box stuffing
       if (fraud_type == "bbs") {
-      # ----------------------
+      #' ----------------------
       
+        #' ---------------------------
+        # fraud in favor of partyA
+        if(fraud_percA > 0) {
+        #' ---------------------------
         
+          # identify total n of votes that should be moved in favor of partyA
+          fraud_tot <- as.integer(sum(votes_all) * fraud_percA)
+          
+          # order polling station IDs by risk status
+          votes_dif <- votes_b - votes_a
+          loosingA <- which(votes_dif > 0)
+          risk_order <- order(votes_dif, decreasing = F)
+          risk_order <- risk_order[which(is.element(risk_order, loosingA))]
         
-        
-        ### logic 
-        # first: identify total number of votes that should be moved
-        
-        # second: identify at-risk polling stations by ordering them by the distance between the two parties. 
-        # only those where candidate that we want to fraud for is loosing at
-        
-        # third: start frauding from below, fill up votes until party is winning then go to next polling station
-        # do this up until the total number of votes that should be moved is reached  
+          # fraud by risk-status, each station is tainted until partyA is winning
+          # then move to next station. do so until all fraud_tot is reached
+          frauded <- 0
+          while(frauded < fraud_tot) {
+            
+            for (id in risk_order) {
+              
+              if(votes_a[id] <= votes_b[id]) {
+                votes_a[id] <- votes_a[id] + 1
+                frauded <- frauded + 1
+                break
+              }
+              
+            }
+            
+          }
+          
+        } # end if fraud_percA > 0
           
         
+        #' ---------------------------
+        # fraud in favor of partyB
+        if(fraud_percB > 0) {
+        #' ---------------------------
         
+          # identify total n of votes that should be moved in favor of partyB
+          fraud_tot <- as.integer(sum(votes_all) * fraud_percB)
+          
+          # order polling station IDs by risk status
+          votes_dif <- votes_a - votes_b
+          loosingB <- which(votes_dif > 0)
+          risk_order <- order(votes_dif, decreasing = F)
+          risk_order <- risk_order[which(is.element(risk_order, loosingB))]
+          
+          # fraud by risk-status, each station is tainted until partyA is winning
+          # then move to next station. do so until all fraud_tot is reached
+          frauded <- 0
+          while(frauded < fraud_tot) {
+            
+            for (id in risk_order) {
+              
+              if(votes_b[id] <= votes_a[id]) {
+                votes_b[id] <- votes_b[id] + 1
+                frauded <- frauded + 1
+                break
+              }
+              
+            }
+            
+          }
+          
+        } # end if fraud_percB > 0  
       
       } # end if fraud_type == "bbs" 
-      
      
-      # store election data as dataframe in list
-      clean <- as.data.frame(cbind(1:n_entities, votes_all, votes_a, votes_b, 
-                                   l_total, turnout, votes_a/votes_all, votes_b/votes_all))
-      colnames(clean) <- c("id", "votes_total", "votes_a", "votes_b", "l_total", 
-                           "turnout", "share_A", "share_B")  
-      clean_list[[election]] <- clean
+        
+        
       
-      print(election)
+      #' ----------------------
+      # vote stealing
+      if (fraud_type == "stealing") {
+      #' ----------------------
+      
+        
+        
+        
+        
+        
+      }
+        
+        
+        
+        
+        
+      #'---------------------------------
+      # redefine variables, store data
+      #' --------------------------------
+        
+        # redefine variables that are affected by fraud
+        votes_all <- votes_a + votes_b 
+        turnout <- votes_all / l_total
+        
+        # store election data as dataframe in list
+        data <- as.data.frame(cbind(1:n_entities, votes_all, votes_a, votes_b, 
+                                     l_total, turnout, votes_a/votes_all, votes_b/votes_all))
+        colnames(data) <- c("id", "votes_total", "votes_a", "votes_b", "l_total", 
+                             "turnout", "share_A", "share_B")  
+        data_list[[election]] <- data
+        
+        print(str_c("election ", election, " out of ", n_elections, " simulated"))
+        
           
     } # end for election in 1:n_elections
     
@@ -189,6 +274,8 @@ source("_functions.R")
     return(data_list)
         
   } # end function gen_data
+
+  sim_elections <- gen_data(n_elections = 10)
 
 
   # store one as example
