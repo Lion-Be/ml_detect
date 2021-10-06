@@ -4,7 +4,7 @@
 # e.g. benford(1)
 # e.g. benford(2)
 # e.g. benford(3)
-benford <- function(position){
+benford_expected <- function(position){
   
   # Declarations
   # digit = the significant digit we are interest in (first digit, second digit, etc.)
@@ -43,7 +43,7 @@ benford <- function(position){
 # e.g. extract(x, 1)
 # e.g. extract(x, 2)
 # e.g. extract(x, "last)
-extract <- function(x, digit){
+extract_digit <- function(x, digit){
   
   # commands for digit: 1, 2, "last"
   
@@ -79,7 +79,7 @@ extract <- function(x, digit){
 # get relative frequencies of digits from digit vector
 # e.g. rel.freq(extract(x,2))
 
-rel.freq <- function(x) {
+rel_freq <- function(x) {
   
   table(x) / sum(table(x))
   
