@@ -367,7 +367,7 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections <- gen_data(n_elections = 1, fraud_type="switching", fraud_percA=0.1)
+  sim_elections <- gen_data(n_elections = 1, fraud_type="switching", fraud_percA=0.02, fraud_percB = 0.04)
 
   # store one as example
   elec <- sim_elections[[1]]
