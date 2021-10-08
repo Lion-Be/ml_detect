@@ -157,9 +157,8 @@ source("_functions.R")
         votes_b <- votes_all - votes_a
     
         
-      #' ----------------------
-      # ballot box stuffing
-      if (fraud_type == "bbs") {
+      #'----------------------
+      # manipulated data
       #' ----------------------
       
         #' ---------------------------
@@ -178,24 +177,80 @@ source("_functions.R")
         
           # fraud by risk-status, each station is tainted until partyA is winning
           # then move to next station. do so until all fraud_tot is reached
-          frauded <- 0
-          while(frauded < fraud_tot) {
-            
-            for (id in risk_order) {
+          
+          
+          #' ----------------------
+          # ballot box stuffing
+          if (fraud_type == "bbs") {
+          #' ----------------------
+          
+            frauded <- 0
+            while(frauded < fraud_tot) {
               
-              if(votes_a[id] <= votes_b[id]) {
-                votes_a[id] <- votes_a[id] + 1
-                frauded <- frauded + 1
-                break
+              for (id in risk_order) {
+                
+                if(votes_a[id] <= votes_b[id]) {
+                  votes_a[id] <- votes_a[id] + 1
+                  frauded <- frauded + 1
+                  break
+                }
+                
               }
               
             }
             
-          }
+          } # end if fraud_type == "bbs"
           
-        } # end if fraud_percA > 0
+          
+          #' ----------------------
+          # vote stealing
+          if (fraud_type == "stealing") {
+          #' ----------------------
+            
+            frauded <- 0
+            while(frauded < fraud_tot) {
+              
+              for (id in risk_order) {
+                
+                if(votes_a[id] <= votes_b[id]) {
+                  votes_b[id] <- votes_b[id] - 1
+                  frauded <- frauded + 1
+                  break
+                }
+                
+              }
+              
+            }
+            
+          } # end if fraud_type == "stealing"
+          
+          
+          #' ----------------------
+          # vote switching
+          if (fraud_type == "switching") {
+          #' ----------------------
+            
+            frauded <- 0
+            while(frauded < fraud_tot) {
+              
+              for (id in risk_order) {
+                
+                if(votes_a[id] <= votes_b[id]) {
+                  votes_b[id] <- votes_b[id] - 1
+                  votes_a[id] <- votes_a[id] + 1
+                  frauded <- frauded + 1
+                  break
+                }
+                
+              }
+              
+            }
+            
+          } # end if fraud_type == "switching"
           
         
+        } # end if fraud_percA > 0
+          
         #' ---------------------------
         # fraud in favor of partyB
         if(fraud_percB > 0) {
@@ -212,43 +267,80 @@ source("_functions.R")
           
           # fraud by risk-status, each station is tainted until partyA is winning
           # then move to next station. do so until all fraud_tot is reached
-          frauded <- 0
-          while(frauded < fraud_tot) {
-            
-            for (id in risk_order) {
+          
+          #' ----------------------
+          # ballot box stuffing
+          if (fraud_type == "bbs") {
+          #' ----------------------
+          
+          
+            frauded <- 0
+            while(frauded < fraud_tot) {
               
-              if(votes_b[id] <= votes_a[id]) {
-                votes_b[id] <- votes_b[id] + 1
-                frauded <- frauded + 1
-                break
+              for (id in risk_order) {
+                
+                if(votes_b[id] <= votes_a[id]) {
+                  votes_b[id] <- votes_b[id] + 1
+                  frauded <- frauded + 1
+                  break
+                }
+                
               }
               
             }
             
-          }
+          } # end if fraud_type == "bbs" 
           
+          
+          #' ----------------------
+          # vote stealing
+          if (fraud_type == "stealing") {
+          #' ----------------------
+            
+            frauded <- 0
+            while(frauded < fraud_tot) {
+              
+              for (id in risk_order) {
+                
+                if(votes_a[id] <= votes_b[id]) {
+                  votes_a[id] <- votes_a[id] - 1
+                  frauded <- frauded + 1
+                  break
+                }
+                
+              }
+              
+            }
+            
+          } # end if fraud_type == "stealing"
+          
+          
+          #' ----------------------
+          # vote switching
+          if (fraud_type == "switching") {
+          #' ----------------------
+            
+            frauded <- 0
+            while(frauded < fraud_tot) {
+              
+              for (id in risk_order) {
+                
+                if(votes_a[id] <= votes_b[id]) {
+                  votes_b[id] <- votes_b[id] + 1
+                  votes_a[id] <- votes_a[id] - 1
+                  frauded <- frauded + 1
+                  break
+                }
+                
+              }
+              
+            }
+            
+          } # end if fraud_type == "switching"
+        
+        
         } # end if fraud_percB > 0  
-      
-      } # end if fraud_type == "bbs" 
      
-        
-        
-      
-      #' ----------------------
-      # vote stealing
-      if (fraud_type == "stealing") {
-      #' ----------------------
-      
-        
-        
-        
-        
-        
-      }
-        
-        
-        
-        
         
       #'---------------------------------
       # redefine variables, store data
@@ -275,11 +367,31 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections <- gen_data(n_elections = 10)
-
+  sim_elections <- gen_data(n_elections = 1, fraud_type="switching", fraud_percA=0.1)
 
   # store one as example
-  clean <- data_list[[1]]
+  elec <- sim_elections[[1]]
+  
+  
+  
+  # - Problem, das ich momentan habe!
+  #   => while-loop ended nie bei hoher fraud_perc, weil die Partei bereits alle distrikte gewonnen hat
+  # 
+  # - Datensatz-Generierung und Training der ML-Modelle kann komplett separat erfolgen, oder?
+  #   - Theoretisch brauche ich die kompletten Datensätze nur für die Visualisierung/Vergleich mit Theorie/empirischen Daten
+  # - Für die ML-Modelle, kann ich einfach einen dataframe aufsetzen
+  # - jede Zeile eine Wahl
+  # - erste Hälfte der Spalten die spezifizierten Argumente in gen_data()
+  # - zweite Hälfte der Spalten die ganzen Werte der Variablen, die ich zum training nutze
+  # - ich könnte mir einfach 1x 1000 Wahlen aus einem Szenario simulieren und damit dann das Training aufsetzen, 
+  # während die ganzen Simulation für die anderen Szenarien durchlaufen
+  # 
+  
+  
+  
+  
+  
+  
       
       
       ### also generell ist das jetzt einmal aufgesetzt
