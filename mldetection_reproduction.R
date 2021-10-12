@@ -24,9 +24,9 @@ source("_functions.R")
   # define function 
   gen_data <- function(n_entities = 1000, turnout_mean = 0.7, turnout_sd = 0.1, 
                        partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
-                       partyB_sd = 0.1, fraud_type="clean", fraud_percA = 0, 
-                       fraud_percB = 0, agg_factor = 1, n_elections = 1000, 
-                       seed = 12345) {  
+                       partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
+                       fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
+                       agg_factor = 1, n_elections = 1000, seed = 12345) {  
     
     # n_entities = number of entities to create data for
     # turnout mean = mean turnout distribution
@@ -36,8 +36,10 @@ source("_functions.R")
     # partyB_mean = mean support party B across entities
     # partyB_sd = sd support party B across entities
     # fraud_type = type of fraud (clean, bbs, stealing, switching)
-    # fraud_percA = overall perc of votes frauded in favor of partyA
-    # fraud_percB = overall perc of votes frauded in favor of partyB
+    # fraud_incA = share of n_entities with incremental fraud for partyA
+    # fraud_extA = share of n_entities with extreme fraud for partyA
+    # fraud_incB = share of n_entities with incremental fraud for partyB
+    # fraud_extB = share of n_entities with extreme fraud for partyB
     # agg_factor = aggregation factor, n_entities/agg_factor is the number
     #              of entities data is aggregated towards
     #              no aggregation for agg_factor = 1
@@ -155,192 +157,172 @@ source("_functions.R")
         votes_all <- round(l_total * turnout, digits = 0)
         votes_a <- round(votes_all * l_share_a, digits = 0)
         votes_b <- votes_all - votes_a
+        non_voters <- l_total - votes_a - votes_b
     
+        n_frauded <- 0
         
-      #'----------------------
+      #'----------------------------
       # manipulated data
-      #' ----------------------
-      
-        #' ---------------------------
-        # fraud in favor of partyA
-        if(fraud_percA > 0) {
-        #' ---------------------------
+      if (fraud_type != "clean") {
+      #' ---------------------------
         
-          # identify total n of votes that should be moved in favor of partyA
-          fraud_tot <- as.integer(sum(votes_all) * fraud_percA)
+          #' -------------------------------------
+          # incremental fraud 
+          if (fraud_incA > 0 | fraud_incB > 0) {
+          #' -------------------------------------
           
-          # order polling station IDs by risk status
-          votes_dif <- votes_b - votes_a
-          loosingA <- which(votes_dif > 0)
-          risk_order <- order(votes_dif, decreasing = F)
-          risk_order <- risk_order[which(is.element(risk_order, loosingA))]
-        
-          # fraud by risk-status, each station is tainted until partyA is winning
-          # then move to next station. do so until all fraud_tot is reached
-          
-          
-          #' ----------------------
-          # ballot box stuffing
-          if (fraud_type == "bbs") {
-          #' ----------------------
-          
-            frauded <- 0
-            while(frauded < fraud_tot) {
+            #' -----------------------------------
+            # fraud in favor of partyA
+            if (fraud_incA > 0) {
+            #' -----------------------------------
+            
+              fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incA)
               
-              for (id in risk_order) {
-                
-                if(votes_a[id] <= votes_b[id]) {
-                  votes_a[id] <- votes_a[id] + 1
-                  frauded <- frauded + 1
-                  break
-                }
-                
+              # ballot box stuffing
+              if (fraud_type == "bbs") {
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
+                votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
+                non_voters <- l_total - votes_a - votes_b
+                n_frauded <- n_frauded + sum(moved_votes)
+              }           
+                  
+              # vote stealing
+              if (fraud_type == "stealing") {
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
+                votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes 
+                n_frauded <- n_frauded + sum(moved_votes)
+              }
+              # vote switching
+              if (fraud_type == "switching") { 
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
+                votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
+                votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
+                n_frauded <- n_frauded + sum(moved_votes)
               }
               
-            }
+            } # end if (fraud_incA > 0)
             
-          } # end if fraud_type == "bbs"
-          
-          
-          #' ----------------------
-          # vote stealing
-          if (fraud_type == "stealing") {
-          #' ----------------------
             
-            frauded <- 0
-            while(frauded < fraud_tot) {
+            #' -----------------------------------
+            # fraud in favor of partyB
+            if (fraud_incB > 0) {
+              #' -----------------------------------
               
-              for (id in risk_order) {
-                
-                if(votes_a[id] <= votes_b[id]) {
-                  votes_b[id] <- votes_b[id] - 1
-                  frauded <- frauded + 1
-                  break
-                }
-                
+              fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incB)
+              
+              # ballot box stuffing
+              if (fraud_type == "bbs") {
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
+                votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
+                non_voters <- l_total - votes_a - votes_b
+                n_frauded <- n_frauded + sum(moved_votes)
+              }           
+              
+              # vote stealing
+              if (fraud_type == "stealing") {
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
+                votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes 
+                n_frauded <- n_frauded + sum(moved_votes)
+              }
+              # vote switching
+              if (fraud_type == "switching") { 
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
+                votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
+                votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
+                n_frauded <- n_frauded + sum(moved_votes)
               }
               
-            }
-            
-          } # end if fraud_type == "stealing"
+            } # end if (fraud_incB > 0)
           
-          
-          #' ----------------------
-          # vote switching
-          if (fraud_type == "switching") {
-          #' ----------------------
+          } # end if (fraud_incA > 0 | fraud_incB > 0) 
             
-            frauded <- 0
-            while(frauded < fraud_tot) {
+            
+          #' -------------------------------------
+          # extreme fraud 
+          if (fraud_extA > 0 | fraud_extB > 0) {
+          #' -------------------------------------
+            
+            #' -----------------------------------
+            # fraud in favor of partyA
+            if (fraud_extA > 0) {
+            #' -----------------------------------
               
-              for (id in risk_order) {
-                
-                if(votes_a[id] <= votes_b[id]) {
-                  votes_b[id] <- votes_b[id] - 1
-                  votes_a[id] <- votes_a[id] + 1
-                  frauded <- frauded + 1
-                  break
-                }
-                
+              fraud_ids <- sample(1:n_entities, size = n_entities * fraud_extA)
+              
+              # ballot box stuffing
+              if (fraud_type == "bbs") {
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
+                votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
+                non_voters <- l_total - votes_a - votes_b
+                n_frauded <- n_frauded + sum(moved_votes)
+              }           
+              
+              # vote stealing
+              if (fraud_type == "stealing") {
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
+                votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes  
+                n_frauded <- n_frauded + sum(moved_votes)
+              }
+              # vote switching
+              if (fraud_type == "switching") { 
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
+                votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
+                votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
+                n_frauded <- n_frauded + sum(moved_votes)
               }
               
-            }
+            } # end if (fraud_incA > 0)
             
-          } # end if fraud_type == "switching"
-          
-        
-        } # end if fraud_percA > 0
-          
-        #' ---------------------------
-        # fraud in favor of partyB
-        if(fraud_percB > 0) {
-        #' ---------------------------
-        
-          # identify total n of votes that should be moved in favor of partyB
-          fraud_tot <- as.integer(sum(votes_all) * fraud_percB)
-          
-          # order polling station IDs by risk status
-          votes_dif <- votes_a - votes_b
-          loosingB <- which(votes_dif > 0)
-          risk_order <- order(votes_dif, decreasing = F)
-          risk_order <- risk_order[which(is.element(risk_order, loosingB))]
-          
-          # fraud by risk-status, each station is tainted until partyA is winning
-          # then move to next station. do so until all fraud_tot is reached
-          
-          #' ----------------------
-          # ballot box stuffing
-          if (fraud_type == "bbs") {
-          #' ----------------------
-          
-          
-            frauded <- 0
-            while(frauded < fraud_tot) {
+            
+            #' -----------------------------------
+            # fraud in favor of partyB
+            if (fraud_extB > 0) {
+            #' -----------------------------------
               
-              for (id in risk_order) {
-                
-                if(votes_b[id] <= votes_a[id]) {
-                  votes_b[id] <- votes_b[id] + 1
-                  frauded <- frauded + 1
-                  break
-                }
-                
+              fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incB)
+              
+              # ballot box stuffing
+              if (fraud_type == "bbs") {
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
+                votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
+                non_voters <- l_total - votes_a - votes_b
+                n_frauded <- n_frauded + sum(moved_votes)
+              }           
+              
+              # vote stealing
+              if (fraud_type == "stealing") {
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
+                votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes  
+                n_frauded <- n_frauded + sum(moved_votes)
+              }
+              # vote switching
+              if (fraud_type == "switching") { 
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
+                votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
+                votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
+                n_frauded <- n_frauded + sum(moved_votes)
               }
               
-            }
+            } # end if (fraud_extB > 0)
             
-          } # end if fraud_type == "bbs" 
+          } # end if (fraud_extA > 0 | fraud_extB > 0)
           
-          
-          #' ----------------------
-          # vote stealing
-          if (fraud_type == "stealing") {
-          #' ----------------------
-            
-            frauded <- 0
-            while(frauded < fraud_tot) {
-              
-              for (id in risk_order) {
-                
-                if(votes_a[id] <= votes_b[id]) {
-                  votes_a[id] <- votes_a[id] - 1
-                  frauded <- frauded + 1
-                  break
-                }
-                
-              }
-              
-            }
-            
-          } # end if fraud_type == "stealing"
-          
-          
-          #' ----------------------
-          # vote switching
-          if (fraud_type == "switching") {
-          #' ----------------------
-            
-            frauded <- 0
-            while(frauded < fraud_tot) {
-              
-              for (id in risk_order) {
-                
-                if(votes_a[id] <= votes_b[id]) {
-                  votes_b[id] <- votes_b[id] + 1
-                  votes_a[id] <- votes_a[id] - 1
-                  frauded <- frauded + 1
-                  break
-                }
-                
-              }
-              
-            }
-            
-          } # end if fraud_type == "switching"
+        } # end if fraud_type != "clean"
         
         
-        } # end if fraud_percB > 0  
-     
+        
         
       #'---------------------------------
       # redefine variables, store data
@@ -349,12 +331,14 @@ source("_functions.R")
         # redefine variables that are affected by fraud
         votes_all <- votes_a + votes_b 
         turnout <- votes_all / l_total
+        non_voters <- l_total - votes_a - votes_b
         
         # store election data as dataframe in list
         data <- as.data.frame(cbind(1:n_entities, votes_all, votes_a, votes_b, 
-                                     l_total, turnout, votes_a/votes_all, votes_b/votes_all))
+                                     l_total, non_voters, turnout, votes_a/votes_all, 
+                                    votes_b/votes_all, n_frauded))
         colnames(data) <- c("id", "votes_total", "votes_a", "votes_b", "l_total", 
-                             "turnout", "share_A", "share_B")  
+                             "non_voters", "turnout", "share_A", "share_B", "n_frauded")  
         data_list[[election]] <- data
         
         print(str_c("election ", election, " out of ", n_elections, " simulated"))
@@ -367,16 +351,15 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections <- gen_data(n_elections = 1, fraud_type="switching", fraud_percA=0.02, fraud_percB = 0.04)
+  sim_elections <- gen_data(n_elections = 10, fraud_type="bbs", fraud_incA = 0.8, fraud_extA = 0.8,
+                            fraud_incB = 0.8, fraud_extB = 0.8)
 
   # store one as example
   elec <- sim_elections[[1]]
   
   
   
-  # - Problem, das ich momentan habe!
-  #   => while-loop ended nie bei hoher fraud_perc, weil die Partei bereits alle distrikte gewonnen hat
-  # 
+
   # - Datensatz-Generierung und Training der ML-Modelle kann komplett separat erfolgen, oder?
   #   - Theoretisch brauche ich die kompletten Datensätze nur für die Visualisierung/Vergleich mit Theorie/empirischen Daten
   # - Für die ML-Modelle, kann ich einfach einen dataframe aufsetzen
