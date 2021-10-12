@@ -4,7 +4,8 @@
 #' -----------------------------------------------------------------------------
 
 #' install and load packages
-packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", "stringr")
+packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
+              "stringr", "dplyr")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -26,7 +27,8 @@ source("_functions.R")
                        partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
-                       agg_factor = 1, n_elections = 1000, seed = 12345) {  
+                       agg_factor = 1, n_elections = 1000, data_type = "full",
+                       seed = 12345) {  
     
     # n_entities = number of entities to create data for
     # turnout mean = mean turnout distribution
@@ -43,11 +45,12 @@ source("_functions.R")
     # agg_factor = aggregation factor, n_entities/agg_factor is the number
     #              of entities data is aggregated towards
     #              no aggregation for agg_factor = 1
+    # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
     # n_elections = number of elections to generate 
   
     #' ----------------------------------------
     #  (i) optimize for baseline values -------
-    #' --------------------------------------
+    #' ----------------------------------------
     
       set.seed(seed)
      
@@ -323,27 +326,83 @@ source("_functions.R")
         
         
         
+      #' ------------------------------------------------------------
+      #  (iii) redefine variables, aggregate data, store data -------
+      #' ------------------------------------------------------------
         
-      #'---------------------------------
-      # redefine variables, store data
-      #' --------------------------------
-        
+        #' --------------------------------------------------
         # redefine variables that are affected by fraud
+        #' --------------------------------------------------
+          
         votes_all <- votes_a + votes_b 
         turnout <- votes_all / l_total
         non_voters <- l_total - votes_a - votes_b
         
-        # store election data as dataframe in list
-        data <- as.data.frame(cbind(1:n_entities, votes_all, votes_a, votes_b, 
-                                     l_total, non_voters, turnout, votes_a/votes_all, 
-                                    votes_b/votes_all, n_frauded))
-        colnames(data) <- c("id", "votes_total", "votes_a", "votes_b", "l_total", 
-                             "non_voters", "turnout", "share_A", "share_B", "n_frauded")  
-        data_list[[election]] <- data
         
-        print(str_c("election ", election, " out of ", n_elections, " simulated"))
-        
+        #' -----------------------------------------------------------
+        # store whole raw (or aggregated) data across all entities
+        if (data_type == "full") {
+        #' -----------------------------------------------------------
           
+          if (agg_factor == 1)  
+            data <- as.data.frame(cbind(1:n_entities, l_total, votes_all, votes_a, votes_b, 
+                                        non_voters, turnout, votes_a/votes_all, votes_b/votes_all))
+          
+          if (agg_factor > 1) {
+            
+            n_entities_agg <- n_entities / agg_factor
+            agg_id <- sort(rep(1:n_entities_agg, agg_factor))
+            data <- as.data.frame(cbind(1:n_entities, agg_id, l_total, votes_all, votes_a, votes_b, 
+                                        non_voters, turnout, votes_a/votes_all, votes_b/votes_all))
+            data <- data %>% 
+              group_by(agg_id) %>% 
+              summarise(agg_id = mean(agg_id), 
+                        l_total = sum(l_total), 
+                        votes_all = sum(votes_all),
+                        votes_a = sum(votes_a), 
+                        votes_b = sum(votes_b), 
+                        non_voters = sum(non_voters))
+            data$turnout <- data$votes_all / data$l_total
+            data$share_A <- data$votes_a / data$votes_all
+            data$share_B <- data$votes_b / data$votes_all
+            
+          } 
+            
+          colnames(data) <- c("id", "l_total", "votes_total", "votes_a", "votes_b",  
+                              "non_voters", "turnout", "share_A", "share_B")  
+          data_list[[election]] <- data
+          
+        } # end if (data_type == "full")
+        
+        
+        
+        
+        
+        
+        #' -------------------------------------------
+        # only store numerical information of data
+        if (data_type == "num_char") {
+        #' -------------------------------------------
+        
+        
+          #### MISSING 
+          # things like chi2 statistic of BL test
+          # fraction of 1 among first digit
+          # skewness/kurtosis of turnout distribution
+          # Wichtig: hier muss ich am Ende von gen_data() die outcome-Variable konstruieren, also n_tainted_votes
+            
+           
+        } # end if (data_type == "num_info")
+        
+        
+        
+        
+        
+        
+        
+        
+        
+       
     } # end for election in 1:n_elections
     
     # return list of generated elections      
@@ -351,11 +410,17 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections <- gen_data(n_elections = 10, fraud_type="bbs", fraud_incA = 0.8, fraud_extA = 0.8,
-                            fraud_incB = 0.8, fraud_extB = 0.8)
+  sim_elections <- gen_data(n_elections = 10, n_entities = 1000, fraud_type="clean", 
+                            agg_factor = 20)
 
   # store one as example
-  elec <- sim_elections[[1]]
+  clean <- sim_elections[[1]]
+  
+  
+  ### I still need to implement data aggregation 
+  ### introduce additional argument: do I want the full dataframes of each election? 
+  ### or is each election collapsed to one row and I only extract the features across the whole country
+  ### for the ML models?
   
   
   
@@ -422,9 +487,9 @@ source("_functions.R")
          labels=F, type="o", lwd=2, ylim=c(0,0.35), main="Second Digit Distribution")
     axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
     axis(2, at=seq(0, 0.35, 0.05))
-    lines(c(table(extract_digit(votes_a, 2))/length(extract_digit(votes_a, 2))), type="o",
+    lines(c(table(extract_digit(clean$votes_a, 2))/length(extract_digit(clean$votes_a, 2))), type="o",
           lwd=2, col="orange")
-    lines(c(table(extract_digit(votes_b, 2))/length(extract_digit(votes_b, 2))), type="o",
+    lines(c(table(extract_digit(clean$votes_b, 2))/length(extract_digit(clean$votes_b, 2))), type="o",
           lwd=2, col="darkred")
     
     legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
@@ -435,9 +500,9 @@ source("_functions.R")
          labels=F, type="o", lwd=2, ylim=c(0,0.35), main="Last Digit Distribution")
     axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
     axis(2, at=seq(0, 0.35, 0.05))
-    lines(c(table(extract_digit(votes_a, "last"))/length(extract_digit(votes_a, "last"))), type="o",
+    lines(c(table(extract_digit(clean$votes_a, "last"))/length(extract_digit(clean$votes_a, "last"))), type="o",
           lwd=2, col="orange")
-    lines(c(table(extract_digit(votes_b, "last"))/length(extract_digit(votes_b, "last"))), type="o",
+    lines(c(table(extract_digit(clean$votes_b, "last"))/length(extract_digit(clean$votes_b, "last"))), type="o",
           lwd=2, col="darkred")
     
     legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
@@ -452,7 +517,7 @@ source("_functions.R")
     
     # what is the theoretical expectation here? is there one?
     
-    log_turnout <- log(clean$votes_total / (clean$l_total - clean$votes_total))
+    log_turnout <- log(bbs$votes_total / (bbs$l_total - bbs$votes_total))
     log_turnoutR <- log_turnout - mean(log_turnout)
     d_log_turnoutR <- density(log_turnoutR)
     
@@ -464,6 +529,10 @@ source("_functions.R")
   # 2.3 bivariate turnout and vote share distribution ------
   #' -------------------------------------------------------
   
+    ### ist there a continuous density estimated?
+    ### what I want is amybe a 100 x 100 discrete histogram?
+    ### maybe continuous density estimation blurrs the picture
+    
     par(mfrow=c(1,1))
     
     rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
@@ -477,7 +546,7 @@ source("_functions.R")
    
     # artifical data
     image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
-    k <- kde2d(turnout, clean$votes_a/clean$votes_total, n=100)
+    k <- kde2d(bbs$turnout, bbs$votes_a/bbs$votes_total, n=100)
     image(k, col=r, add = T)
     
     
