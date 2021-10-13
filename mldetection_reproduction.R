@@ -5,7 +5,7 @@
 
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
-              "stringr", "dplyr")
+              "stringr", "dplyr", "readxl")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -339,10 +339,9 @@ source("_functions.R")
         non_voters <- l_total - votes_a - votes_b
         
         
-        #' -----------------------------------------------------------
-        # store whole raw (or aggregated) data across all entities
-        if (data_type == "full") {
-        #' -----------------------------------------------------------
+        #' ------------------------------------
+        # construct (aggregated) dataset
+        #' ------------------------------------
           
           if (agg_factor == 1)  
             data <- as.data.frame(cbind(1:n_entities, l_total, votes_all, votes_a, votes_b, 
@@ -367,40 +366,44 @@ source("_functions.R")
             data$share_B <- data$votes_b / data$votes_all
             
           } 
-            
+           
+        
+        #' -----------------------------------------------------------
+        # store whole raw (or aggregated) data across all entities
+        #' -----------------------------------------------------------
+         
+        if (data_type == "full") {
+        
           colnames(data) <- c("id", "l_total", "votes_total", "votes_a", "votes_b",  
                               "non_voters", "turnout", "share_A", "share_B")  
           data_list[[election]] <- data
           
-        } # end if (data_type == "full")
+        }
         
-        
-        
-        
-        
-        
-        #' -------------------------------------------
-        # only store numerical information of data
         if (data_type == "num_char") {
-        #' -------------------------------------------
-        
         
           #### MISSING 
           # things like chi2 statistic of BL test
           # fraction of 1 among first digit
           # skewness/kurtosis of turnout distribution
           # Wichtig: hier muss ich am Ende von gen_data() die outcome-Variable konstruieren, also n_tainted_votes
-            
-           
-        } # end if (data_type == "num_info")
         
-        
-        
-        
-        
-        
-        
-        
+          data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
+          
+          # fraud variables (y)
+          data_char$n_frauded <- n_frauded
+          data_char$fraud_incA <- fraud_incA
+          data_char$fraud_extA <- fraud_extA
+          data_char$fraud_incB <- fraud_incB
+          data_char$fraud_extB <- fraud_extB
+          
+          # numerical characteristics (X)
+          data_char$bl1_frac1A <- length(which(extract_digit(data$votes_a, 1) == 1)) / length(data$votes_a) # partyA, fraction of '1' among first digit
+          data_char$bl1_frac1B <- length(which(extract_digit(data$votes_b, 1) == 1)) / length(data$votes_b) # partyA, fraction of '1' among first digit
+      
+          data_list[[election]] <- data_char 
+          
+        } # end if (data_type == "num_char")
         
        
     } # end for election in 1:n_elections
@@ -411,54 +414,110 @@ source("_functions.R")
   } # end function gen_data
 
   sim_elections <- gen_data(n_elections = 10, n_entities = 1000, fraud_type="clean", 
-                            agg_factor = 20)
+                            agg_factor = 1, data_type="num_char")
 
-  # store one as example
-  clean <- sim_elections[[1]]
   
-  
-  ### I still need to implement data aggregation 
-  ### introduce additional argument: do I want the full dataframes of each election? 
-  ### or is each election collapsed to one row and I only extract the features across the whole country
-  ### for the ML models?
-  
-  
-  
-
-  # - Datensatz-Generierung und Training der ML-Modelle kann komplett separat erfolgen, oder?
-  #   - Theoretisch brauche ich die kompletten Datensätze nur für die Visualisierung/Vergleich mit Theorie/empirischen Daten
-  # - Für die ML-Modelle, kann ich einfach einen dataframe aufsetzen
-  # - jede Zeile eine Wahl
-  # - erste Hälfte der Spalten die spezifizierten Argumente in gen_data()
-  # - zweite Hälfte der Spalten die ganzen Werte der Variablen, die ich zum training nutze
-  # - ich könnte mir einfach 1x 1000 Wahlen aus einem Szenario simulieren und damit dann das Training aufsetzen, 
-  # während die ganzen Simulation für die anderen Szenarien durchlaufen
-  # 
-  
-  
-  
-  
-  
-  
-      
-      
-      ### also generell ist das jetzt einmal aufgesetzt
-      ### mal schauen, ob das theoretischen bzw. empririschen Charakteristiken 
-      ### folgt. Fälle mit verschiedenen Fallzahlen und clean vs. fraud. 
-     
-      ### an sich muss man sagen, dass ich zur Zeit die p(turnout, vote share)
-      ### distribution, die approxmiert werden soll, mit off-diagonals = 0
-      ### definiere. Das bedeutet, meine Daten werden wohl keinen skew
-      ### in dieser Verteilung haben. Ist das in Ordnung?
-      ### an sich soll es ja in sauberen Daten auch keinen *starken* skew geben.
-       
-        
-         
         
 #' ------------------------------------------------------------------
 #  --- 2. comparison to theoretical/empirical characteristics -------
 #' ------------------------------------------------------------------ 
     
+  #' ------------------------
+  # 2.0 empirical data ------
+  #' ------------------------
+  
+    # in general: 
+    # entities with an electorate < 100 are excluded
+    # entities with NAs are excluded
+    # when turnout is higher than 1, it set to 1
+  
+  
+    # -----------------------------------
+    # Venezuela, recall referendum 2004  
+    # -----------------------------------
+     
+      ven04 <- read_excel("U:/PhD Electoral Fraud/Data/Venezuela/2004_referendum_revocatorio/referendum.xls",
+                              skip = 34)
+      # rrp_si = number of yes votes
+      # rrp_no = number of no votes
+      # rep200407 = number of eligible voters  
+      ven04$votes_all <- ven04$rrp_si+ven04$rrp_no+ven04$rrp_nulo
+      ven04$turnout <- ven04$votes_all / ven04$rep200407
+      ven04$share_si <- ven04$rrp_si / (ven04$rrp_si + ven04$rrp_no)
+      ven04$share_no <- ven04$rrp_no / (ven04$rrp_si + ven04$rrp_no)
+  
+      # exclude units with an electorate < 100
+      ven04 <- ven04[-which(ven04$rep200407 < 100),]
+      
+      # set turnout > 1 to 1
+      ven04$turnout[which(ven04$turnout > 1)] <- 1
+    
+      
+    # -------------------------------------
+    # Russia, presidential election 2012
+    # -------------------------------------
+      
+      ru12_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_1of2.xls")
+      ru12_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_2of2.xls")
+      ru12 <- rbind(ru12_1, ru12_2)
+      ru12$`Number of invalid ballots`[which(ru12$`Number of invalid ballots`=="A")] <- 0
+      ru12$votes_all <- ru12$`Number of valid ballots` + as.numeric(ru12$`Number of invalid ballots`)
+      ru12$turnout <- ru12$votes_all / ru12$`The number of voters included in voters list` 
+      ru12$putin <- ru12$`Vladimir Putin`
+      ru12$share_putin <- ru12$putin / ru12$votes_all
+      
+      # exclude units with an electorate < 100
+      ru12 <- ru12[-which(ru12$`The number of voters included in voters list` < 100),]
+      # exclude units with NAs in share_putin
+      ru12 <- ru12[-which(is.na(ru12$share_putin)),]
+      
+      
+    # -------------------------------------
+    # Uganda, presidential election 2011
+    # -------------------------------------
+      
+      uga11 <- read_excel("U:/PhD Electoral Fraud/Data/Uganda2011.xls", col_names = F)
+      uga11$eligible <- uga11$...11
+      
+      uga11$bwanika <- as.numeric(unlist(uga11$...12))
+      uga11$besigye <- as.numeric(unlist(uga11$...13))
+      uga11$kamya <- as.numeric(unlist(uga11$...14))
+      uga11$lubega <- as.numeric(unlist(uga11$...15))
+      uga11$mao <- as.numeric(unlist(uga11$...16))
+      uga11$otunnu <- as.numeric(unlist(uga11$...17))
+      uga11$ssali <- as.numeric(unlist(uga11$...18))
+      uga11$museveni <- as.numeric(unlist(uga11$...19))
+      
+      uga11$votes_all <- uga11$...20
+      uga11$invalid <- as.numeric(unlist(uga11$...21))
+      uga11$blanks <- as.numeric(unlist(uga11$...22))
+     
+      # nice check 
+      # sum(c(uga11$bwanika, uga11$besigye, uga11$kamya, uga11$lubega, uga11$mao, uga11$otunnu, uga11$ssali, uga11$museveni), na.rm=T)
+      # sum(uga11$votes_all, na.rm=T)
+      
+      uga11$turnout <- uga11$votes_all / uga11$eligible
+      uga11$share_museveni <- uga11$museveni / uga11$votes_all
+      
+      # exclude units with an electorate < 100
+      uga11 <- uga11[-which(uga11$eligible < 100),]
+      
+      # exclude units with NAs in share_museveni
+      uga11 <- uga11[-which(is.na(uga11$share_museveni)),]
+     
+      
+    # -----------------------------------------
+    # Austria, parliamentary election 2008
+    # -----------------------------------------
+      
+      ### before I work with the data: always first check whether turnout can be constructed based on the available information
+      
+    
+      
+      
+      
+      
+      
   #' ----------------
   # 2.1 digits ------
   #' ----------------
@@ -467,47 +526,8 @@ source("_functions.R")
     # - add empirical distributions to this
     # - add many simulated curves here to show variability of clean elections
   
-    par(mfrow=c(1,3))
-    
-    # 1BL
-    plot(benford_expected(1), ylab="Relative Frequency", xlab="Digit", 
-         labels=F, type="o", lwd=2, ylim=c(0,0.35), main="First Digit Distribution")
-    axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-    axis(2, at=seq(0, 0.35, 0.05))
-    lines(c(NA, table(extract_digit(clean$votes_a, 1))/length(extract_digit(clean$votes_a, 1))), type="o",
-          lwd=2, col="orange")
-    lines(c(NA, table(extract_digit(clean$votes_b, 1))/length(extract_digit(clean$votes_b, 1))), type="o",
-          lwd=2, col="darkred")
-    
-    legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
-           col=c("black", "orange", "darkred"), lwd=c(3,3,3), bty="n")
-    
-    # 2BL
-    plot(benford_expected(2), ylab="Relative Frequency", xlab="Digit", 
-         labels=F, type="o", lwd=2, ylim=c(0,0.35), main="Second Digit Distribution")
-    axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-    axis(2, at=seq(0, 0.35, 0.05))
-    lines(c(table(extract_digit(clean$votes_a, 2))/length(extract_digit(clean$votes_a, 2))), type="o",
-          lwd=2, col="orange")
-    lines(c(table(extract_digit(clean$votes_b, 2))/length(extract_digit(clean$votes_b, 2))), type="o",
-          lwd=2, col="darkred")
-    
-    legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
-           col=c("black", "orange", "darkred"), lwd=c(3,3,3), bty="n")
-    
-    # Last Digit
-    plot(benford_expected(3), ylab="Relative Frequency", xlab="Digit", 
-         labels=F, type="o", lwd=2, ylim=c(0,0.35), main="Last Digit Distribution")
-    axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-    axis(2, at=seq(0, 0.35, 0.05))
-    lines(c(table(extract_digit(clean$votes_a, "last"))/length(extract_digit(clean$votes_a, "last"))), type="o",
-          lwd=2, col="orange")
-    lines(c(table(extract_digit(clean$votes_b, "last"))/length(extract_digit(clean$votes_b, "last"))), type="o",
-          lwd=2, col="darkred")
-    
-    legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
-           col=c("black", "orange", "darkred"), lwd=c(3,3,3), bty="n")
-    
+  
+    plot_digits(uga11$besigye, uga11$museveni)
   
   #' ----------------------------------
   # 2.2 logarithmic turnout rate ------
@@ -546,7 +566,7 @@ source("_functions.R")
    
     # artifical data
     image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
-    k <- kde2d(bbs$turnout, bbs$votes_a/bbs$votes_total, n=100)
+    k <- kde2d(uga11$turnout, uga11$share_museveni, n=100)
     image(k, col=r, add = T)
     
     
