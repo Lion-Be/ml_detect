@@ -85,6 +85,50 @@ rel_freq <- function(x) {
   
 }
 
+# --------------------------------------------------------------------------- #
 
-
+plot_digits <- function(votes_a, votes_b) {
+  
+  par(mfrow=c(1,3))
+  
+  # 1BL
+  plot(benford_expected(1), ylab="Relative Frequency", xlab="Digit", 
+       labels=F, type="o", lwd=2, ylim=c(0,0.35), main="First Digit Distribution")
+  axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
+  axis(2, at=seq(0, 0.35, 0.05))
+  lines(c(NA, table(extract_digit(votes_a, 1))/length(extract_digit(votes_a, 1))), type="o",
+        lwd=2, col="orange")
+  lines(c(NA, table(extract_digit(votes_b, 1))/length(extract_digit(votes_b, 1))), type="o",
+        lwd=2, col="darkred")
+  
+  legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
+         col=c("black", "orange", "darkred"), lwd=c(3,3,3), bty="n")
+  
+  # 2BL
+  plot(benford_expected(2), ylab="Relative Frequency", xlab="Digit", 
+       labels=F, type="o", lwd=2, ylim=c(0,0.35), main="Second Digit Distribution")
+  axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
+  axis(2, at=seq(0, 0.35, 0.05))
+  lines(c(table(extract_digit(votes_a, 2))/length(extract_digit(votes_a, 2))), type="o",
+        lwd=2, col="orange")
+  lines(c(table(extract_digit(votes_b, 2))/length(extract_digit(votes_b, 2))), type="o",
+        lwd=2, col="darkred")
+  
+  legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
+         col=c("black", "orange", "darkred"), lwd=c(3,3,3), bty="n")
+  
+  # Last Digit
+  plot(benford_expected(3), ylab="Relative Frequency", xlab="Digit", 
+       labels=F, type="o", lwd=2, ylim=c(0,0.35), main="Last Digit Distribution")
+  axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
+  axis(2, at=seq(0, 0.35, 0.05))
+  lines(c(table(extract_digit(votes_a, "last"))/length(extract_digit(votes_a, "last"))), type="o",
+        lwd=2, col="orange")
+  lines(c(table(extract_digit(votes_b, "last"))/length(extract_digit(votes_b, "last"))), type="o",
+        lwd=2, col="darkred")
+  
+  legend(6,0.35, c("Theory", "Candidate A", "Candidate B"), 
+         col=c("black", "orange", "darkred"), lwd=c(3,3,3), bty="n")
+  
+}
 
