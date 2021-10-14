@@ -510,13 +510,27 @@ source("_functions.R")
     # Austria, parliamentary election 2008
     # -----------------------------------------
       
-      ### before I work with the data: always first check whether turnout can be constructed based on the available information
+      aus08 <- read_excel("U:/PhD Electoral Fraud/Data/Austria2008_adjusted.xls")
+      aus08$turnout <- aus08$`Wahl-\nbeteil-\nigung\nin %` / 100
+      aus08$share_spo <- aus08$`%...9`/ 100
       
+      # exclude units with an electorate < 100
+      aus08 <- aus08[-which(aus08[,3] < 100),]
+      
+      
+    # --------------------------------------------
+    # Spain, European Parliament Election 2019
+    # --------------------------------------------
+      
+      esp19 <- read_excel("U:/PhD Electoral Fraud/Data/Spain_EP_2019.xlsx", skip = 5)
+      esp19$turnout <- esp19$`Total votantes` / esp19$`Total censo electoral` 
+      esp19$share_psoe <- esp19$PSOE / esp19$`Votos válidos`
+      
+      # exclude units with an electorate < 100
+      esp19 <- esp19[-which(esp19$`Total censo electoral` < 100),]
     
-      
-      
-      
-      
+          
+  
       
   #' ----------------
   # 2.1 digits ------
@@ -527,7 +541,7 @@ source("_functions.R")
     # - add many simulated curves here to show variability of clean elections
   
   
-    plot_digits(uga11$besigye, uga11$museveni)
+    plot_digits(aus08$SPÖ, aus08$ÖVP)
   
   #' ----------------------------------
   # 2.2 logarithmic turnout rate ------
@@ -566,7 +580,7 @@ source("_functions.R")
    
     # artifical data
     image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
-    k <- kde2d(uga11$turnout, uga11$share_museveni, n=100)
+    k <- kde2d(esp19$turnout, esp19$share_psoe, n=100)
     image(k, col=r, add = T)
     
     
