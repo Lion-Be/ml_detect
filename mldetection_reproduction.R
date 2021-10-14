@@ -530,7 +530,19 @@ source("_functions.R")
       esp19 <- esp19[-which(esp19$`Total censo electoral` < 100),]
     
           
-  
+    # --------------------------------------------
+    # Finland, Municipal Election 2017
+    # --------------------------------------------
+      
+      fin17 <- read_excel("U:/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
+      fin17$turnout <- as.numeric(fin17$`Voting turnout`) / 100
+      fin17$kok_votes <- as.numeric(fin17$`KOK Votes cast, total`)
+      fin17$sdp_votes <- as.numeric(fin17$`SDP Votes cast, total`)
+      fin17$share_kok <- as.numeric(fin17$`KOK Proportion of all votes cast`) / 100
+      
+      # exclude units with NAs in share_kok
+      fin17 <- fin17[-which(is.na(fin17$share_kok)),]
+      
       
   #' ----------------
   # 2.1 digits ------
@@ -541,7 +553,7 @@ source("_functions.R")
     # - add many simulated curves here to show variability of clean elections
   
   
-    plot_digits(aus08$SPÖ, aus08$ÖVP)
+    plot_digits(fin17$kok_votes, fin17$sdp_votes)
   
   #' ----------------------------------
   # 2.2 logarithmic turnout rate ------
@@ -580,7 +592,7 @@ source("_functions.R")
    
     # artifical data
     image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
-    k <- kde2d(esp19$turnout, esp19$share_psoe, n=100)
+    k <- kde2d(fin17$turnout, fin17$kok_share, n=100)
     image(k, col=r, add = T)
     
     
