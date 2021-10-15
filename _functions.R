@@ -87,7 +87,7 @@ rel_freq <- function(x) {
 
 # --------------------------------------------------------------------------- #
 
-plot_digits <- function(votes_a, votes_b) {
+plot_digits_all <- function(votes_a, votes_b) {
   
   par(mfrow=c(1,3))
   
@@ -132,3 +132,53 @@ plot_digits <- function(votes_a, votes_b) {
   
 }
 
+
+# --------------------------------------------------------------------------- #
+
+plot_digits_1last <- function(votes_a, syn_data, title) {
+  
+  # -------
+  # 1BL
+  # -------
+  # first digit theory
+  plot(benford_expected(1), ylab="Relative Frequency", xlab="Numeral", 
+       labels=F, type="o", bty="n", lwd=1, ylim=c(0,0.35), main="")
+  axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
+  axis(2, at=seq(0, 0.35, 0.05))
+  
+  grid(10, 10)
+  
+  # first digit synthetic 
+  for (elec in 1:10) 
+    lines(c(NA, table(extract_digit(syn_data[[elec]]$votes_a, 1))/length(extract_digit(syn_data[[elec]]$votes_a, 1))), type="o",
+          lwd=2, col="lightgrey")
+  
+  # first digit empirical
+  lines(c(NA, table(extract_digit(votes_a, 1))/length(extract_digit(votes_a, 1))), type="o",
+        lwd=2, col="orange")
+  
+  # first digit theory (pronounce again)
+  lines(benford_expected(1), type="o",
+        lwd=2, col="black")
+  
+  
+  # ------------
+  # Last digit
+  # ------------
+  
+  # last digit synthetic 
+  for (elec in 1:10) 
+    lines(c(table(extract_digit(syn_data[[elec]]$votes_a, "last"))/length(extract_digit(syn_data[[elec]]$votes_a, "last"))), type="o",
+          lwd=2, lty=2, col="lightgrey")
+  
+  # last digit empirical
+  lines(c(table(extract_digit(votes_a, "last"))/length(extract_digit(votes_a, "last"))), type="o",
+        lwd=2, lty=2, col="blue")
+  
+  # last digit theory 
+  lines(benford_expected(3), type="o",
+        lwd=2, lty=2, col="black")
+  
+  text(2.3, 0.35, title, cex=1.5, font=2)
+  
+}
