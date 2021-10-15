@@ -5,7 +5,7 @@
 
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
-              "stringr", "dplyr", "readxl")
+              "stringr", "dplyr", "readxl", "tikzDevice")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -414,7 +414,7 @@ source("_functions.R")
   } # end function gen_data
 
   sim_elections <- gen_data(n_elections = 10, n_entities = 1000, fraud_type="clean", 
-                            agg_factor = 1, data_type="num_char")
+                            agg_factor = 1, data_type="full")
 
   
         
@@ -431,118 +431,188 @@ source("_functions.R")
     # entities with NAs are excluded
     # when turnout is higher than 1, it set to 1
   
+    #' -------------------------------------------
+    # 2.1 Venezuela, recall referendum 2004 ------
+    #' -------------------------------------------
   
-    # -----------------------------------
-    # Venezuela, recall referendum 2004  
-    # -----------------------------------
-     
-      ven04 <- read_excel("U:/PhD Electoral Fraud/Data/Venezuela/2004_referendum_revocatorio/referendum.xls",
-                              skip = 34)
-      # rrp_si = number of yes votes
-      # rrp_no = number of no votes
-      # rep200407 = number of eligible voters  
-      ven04$votes_all <- ven04$rrp_si+ven04$rrp_no+ven04$rrp_nulo
-      ven04$turnout <- ven04$votes_all / ven04$rep200407
-      ven04$share_si <- ven04$rrp_si / (ven04$rrp_si + ven04$rrp_no)
-      ven04$share_no <- ven04$rrp_no / (ven04$rrp_si + ven04$rrp_no)
+      #' ------------------------
+      # empirical
+      #' ------------------------
   
-      # exclude units with an electorate < 100
-      ven04 <- ven04[-which(ven04$rep200407 < 100),]
-      
-      # set turnout > 1 to 1
-      ven04$turnout[which(ven04$turnout > 1)] <- 1
+        ven04 <- read_excel("U:/PhD Electoral Fraud/Data/Venezuela/2004_referendum_revocatorio/referendum.xls",
+                                skip = 34)
+        # rrp_si = number of yes votes
+        # rrp_no = number of no votes
+        # rep200407 = number of eligible voters  
+        ven04$votes_all <- ven04$rrp_si+ven04$rrp_no+ven04$rrp_nulo
+        ven04$turnout <- ven04$votes_all / ven04$rep200407
+        ven04$share_si <- ven04$rrp_si / (ven04$rrp_si + ven04$rrp_no)
+        ven04$share_no <- ven04$rrp_no / (ven04$rrp_si + ven04$rrp_no)
     
-      
-    # -------------------------------------
-    # Russia, presidential election 2012
-    # -------------------------------------
-      
-      ru12_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_1of2.xls")
-      ru12_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_2of2.xls")
-      ru12 <- rbind(ru12_1, ru12_2)
-      ru12$`Number of invalid ballots`[which(ru12$`Number of invalid ballots`=="A")] <- 0
-      ru12$votes_all <- ru12$`Number of valid ballots` + as.numeric(ru12$`Number of invalid ballots`)
-      ru12$turnout <- ru12$votes_all / ru12$`The number of voters included in voters list` 
-      ru12$putin <- ru12$`Vladimir Putin`
-      ru12$share_putin <- ru12$putin / ru12$votes_all
-      
-      # exclude units with an electorate < 100
-      ru12 <- ru12[-which(ru12$`The number of voters included in voters list` < 100),]
-      # exclude units with NAs in share_putin
-      ru12 <- ru12[-which(is.na(ru12$share_putin)),]
-      
-      
-    # -------------------------------------
-    # Uganda, presidential election 2011
-    # -------------------------------------
-      
-      uga11 <- read_excel("U:/PhD Electoral Fraud/Data/Uganda2011.xls", col_names = F)
-      uga11$eligible <- uga11$...11
-      
-      uga11$bwanika <- as.numeric(unlist(uga11$...12))
-      uga11$besigye <- as.numeric(unlist(uga11$...13))
-      uga11$kamya <- as.numeric(unlist(uga11$...14))
-      uga11$lubega <- as.numeric(unlist(uga11$...15))
-      uga11$mao <- as.numeric(unlist(uga11$...16))
-      uga11$otunnu <- as.numeric(unlist(uga11$...17))
-      uga11$ssali <- as.numeric(unlist(uga11$...18))
-      uga11$museveni <- as.numeric(unlist(uga11$...19))
-      
-      uga11$votes_all <- uga11$...20
-      uga11$invalid <- as.numeric(unlist(uga11$...21))
-      uga11$blanks <- as.numeric(unlist(uga11$...22))
-     
-      # nice check 
-      # sum(c(uga11$bwanika, uga11$besigye, uga11$kamya, uga11$lubega, uga11$mao, uga11$otunnu, uga11$ssali, uga11$museveni), na.rm=T)
-      # sum(uga11$votes_all, na.rm=T)
-      
-      uga11$turnout <- uga11$votes_all / uga11$eligible
-      uga11$share_museveni <- uga11$museveni / uga11$votes_all
-      
-      # exclude units with an electorate < 100
-      uga11 <- uga11[-which(uga11$eligible < 100),]
-      
-      # exclude units with NAs in share_museveni
-      uga11 <- uga11[-which(is.na(uga11$share_museveni)),]
-     
-      
-    # -----------------------------------------
-    # Austria, parliamentary election 2008
-    # -----------------------------------------
-      
-      aus08 <- read_excel("U:/PhD Electoral Fraud/Data/Austria2008_adjusted.xls")
-      aus08$turnout <- aus08$`Wahl-\nbeteil-\nigung\nin %` / 100
-      aus08$share_spo <- aus08$`%...9`/ 100
-      
-      # exclude units with an electorate < 100
-      aus08 <- aus08[-which(aus08[,3] < 100),]
-      
-      
-    # --------------------------------------------
-    # Spain, European Parliament Election 2019
-    # --------------------------------------------
-      
-      esp19 <- read_excel("U:/PhD Electoral Fraud/Data/Spain_EP_2019.xlsx", skip = 5)
-      esp19$turnout <- esp19$`Total votantes` / esp19$`Total censo electoral` 
-      esp19$share_psoe <- esp19$PSOE / esp19$`Votos válidos`
-      
-      # exclude units with an electorate < 100
-      esp19 <- esp19[-which(esp19$`Total censo electoral` < 100),]
+        # exclude units with an electorate < 100
+        ven04 <- ven04[-which(ven04$rep200407 < 100),]
+        
+        # set turnout > 1 to 1
+        ven04$turnout[which(ven04$turnout > 1)] <- 1
     
+        
+      #' ------------------------
+      # synthetic
+      #' ------------------------
+    
+        
+        
+        
+        
+      #' --------------------------------------------
+      # 2.2 Russia, presidential election 2012 ------
+      #' --------------------------------------------
+      
+        #' ------------------------
+        # empirical
+        #' ------------------------
+        
+          ru12_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_1of2.xls")
+          ru12_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_2of2.xls")
+          ru12 <- rbind(ru12_1, ru12_2)
+          ru12$`Number of invalid ballots`[which(ru12$`Number of invalid ballots`=="A")] <- 0
+          ru12$votes_all <- ru12$`Number of valid ballots` + as.numeric(ru12$`Number of invalid ballots`)
+          ru12$turnout <- ru12$votes_all / ru12$`The number of voters included in voters list` 
+          ru12$putin <- ru12$`Vladimir Putin`
+          ru12$share_putin <- ru12$putin / ru12$votes_all
           
-    # --------------------------------------------
-    # Finland, Municipal Election 2017
-    # --------------------------------------------
+          # exclude units with an electorate < 100
+          ru12 <- ru12[-which(ru12$`The number of voters included in voters list` < 100),]
+          # exclude units with NAs in share_putin
+          ru12 <- ru12[-which(is.na(ru12$share_putin)),]
       
-      fin17 <- read_excel("U:/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
-      fin17$turnout <- as.numeric(fin17$`Voting turnout`) / 100
-      fin17$kok_votes <- as.numeric(fin17$`KOK Votes cast, total`)
-      fin17$sdp_votes <- as.numeric(fin17$`SDP Votes cast, total`)
-      fin17$share_kok <- as.numeric(fin17$`KOK Proportion of all votes cast`) / 100
+          
+        #' ------------------------
+        # synthetic
+        #' ------------------------
+        
+          
       
-      # exclude units with NAs in share_kok
-      fin17 <- fin17[-which(is.na(fin17$share_kok)),]
+      #' --------------------------------------------
+      # 2.3 Uganda, presidential election 2011 ------
+      #' --------------------------------------------
       
+        #' ------------------------
+        # empirical
+        #' ------------------------
+          
+          uga11 <- read_excel("U:/PhD Electoral Fraud/Data/Uganda2011.xls", col_names = F)
+          uga11$eligible <- uga11$...11
+          
+          uga11$bwanika <- as.numeric(unlist(uga11$...12))
+          uga11$besigye <- as.numeric(unlist(uga11$...13))
+          uga11$kamya <- as.numeric(unlist(uga11$...14))
+          uga11$lubega <- as.numeric(unlist(uga11$...15))
+          uga11$mao <- as.numeric(unlist(uga11$...16))
+          uga11$otunnu <- as.numeric(unlist(uga11$...17))
+          uga11$ssali <- as.numeric(unlist(uga11$...18))
+          uga11$museveni <- as.numeric(unlist(uga11$...19))
+          
+          uga11$votes_all <- uga11$...20
+          uga11$invalid <- as.numeric(unlist(uga11$...21))
+          uga11$blanks <- as.numeric(unlist(uga11$...22))
+         
+          # nice check 
+          # sum(c(uga11$bwanika, uga11$besigye, uga11$kamya, uga11$lubega, uga11$mao, uga11$otunnu, uga11$ssali, uga11$museveni), na.rm=T)
+          # sum(uga11$votes_all, na.rm=T)
+          
+          uga11$turnout <- uga11$votes_all / uga11$eligible
+          uga11$share_museveni <- uga11$museveni / uga11$votes_all
+          
+          # exclude units with an electorate < 100
+          uga11 <- uga11[-which(uga11$eligible < 100),]
+          
+          # exclude units with NAs in share_museveni
+          uga11 <- uga11[-which(is.na(uga11$share_museveni)),]
+        
+           
+        #' ------------------------
+        # synthetic
+        #' ------------------------
+        
+          
+      
+      #' ----------------------------------------------
+      # 2.4 Austria, parliamentary election 2008 ------
+      #' ----------------------------------------------
+      
+        #' ------------------------
+        # empirical
+        #' ------------------------
+        
+          aus08 <- read_excel("U:/PhD Electoral Fraud/Data/Austria2008_adjusted.xls")
+          aus08$turnout <- aus08$`Wahl-\nbeteil-\nigung\nin %` / 100
+          aus08$share_spo <- aus08$`%...9`/ 100
+          aus08$share_ovp <- aus08$`%...11`/ 100
+          
+          # exclude units with an electorate < 100
+          aus08 <- aus08[-which(aus08[,3] < 100),]
+      
+        
+        #' ------------------------
+        # synthetic
+        #' ------------------------
+        
+          aus08_syn <- gen_data(n_entities = nrow(aus08),
+                                turnout_mean = mean(aus08$turnout), 
+                                turnout_sd = sd(aus08$turnout), 
+                                partyA_mean = mean(aus08$share_spo), 
+                                partyA_sd = sd(aus08$share_spo), 
+                                partyB_mean = mean(aus08$share_ovp), 
+                                partyB_sd = sd(aus08$share_ovp),
+                                fraud_type = "clean",
+                                n_elections = "10"
+                                )
+          
+      #' --------------------------------------------------
+      # 2.5 Spain, European Parliament election 2019 ------
+      #' --------------------------------------------------
+      
+        #' ------------------------
+        # empirical
+        #' ------------------------
+            
+          esp19 <- read_excel("U:/PhD Electoral Fraud/Data/Spain_EP_2019.xlsx", skip = 5)
+          esp19$turnout <- esp19$`Total votantes` / esp19$`Total censo electoral` 
+          esp19$share_psoe <- esp19$PSOE / esp19$`Votos válidos`
+          
+          # exclude units with an electorate < 100
+          esp19 <- esp19[-which(esp19$`Total censo electoral` < 100),]
+      
+          
+        #' ------------------------
+        # synthetic
+        #' ------------------------
+        
+          
+      #' ------------------------------------------
+      # 2.6 Finland, municipal election 2017 ------
+      #' ------------------------------------------
+  
+        #' ------------------------
+        # empirical
+        #' ------------------------
+          
+          fin17 <- read_excel("U:/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
+          fin17$turnout <- as.numeric(fin17$`Voting turnout`) / 100
+          fin17$kok_votes <- as.numeric(fin17$`KOK Votes cast, total`)
+          fin17$sdp_votes <- as.numeric(fin17$`SDP Votes cast, total`)
+          fin17$share_kok <- as.numeric(fin17$`KOK Proportion of all votes cast`) / 100
+          
+          # exclude units with NAs in share_kok
+          fin17 <- fin17[-which(is.na(fin17$share_kok)),]
+          
+          
+        #' ------------------------
+        # synthetic
+        #' ------------------------
+          
+          
       
   #' ----------------
   # 2.1 digits ------
@@ -596,10 +666,6 @@ source("_functions.R")
     image(k, col=r, add = T)
     
     
-  
-  
-  
-  
   
   
   
