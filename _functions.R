@@ -135,18 +135,33 @@ plot_digits_all <- function(votes_a, votes_b) {
 
 # --------------------------------------------------------------------------- #
 
-plot_digits_1last <- function(votes_a, syn_data, title) {
-  
+plot_digits_1last <- function(votes_a, syn_data, title=" ", ylab = " ", xlab = " ", 
+                              y_axis = F, y_labels = F, x_axis = F, x_labels = F) {
+
   # -------
   # 1BL
   # -------
   # first digit theory
-  plot(benford_expected(1), ylab="Relative Frequency", xlab="Numeral", 
-       labels=F, type="o", bty="n", lwd=1, ylim=c(0,0.35), main="")
-  axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-  axis(2, at=seq(0, 0.35, 0.05))
+  par(xpd=NA)
+  plot(benford_expected(1), main="", ylab = ylab, xlab = xlab, 
+       axes = F, bty="n", 
+       type="o", lwd=1, ylim=c(0,0.35), labels=F)
   
-  grid(10, 10)
+  if (x_axis)
+    ifelse(x_labels, 
+           axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")), 
+           axis(1, at=1:10, labels = rep(" ", 10)))
+    
+  if (y_axis)
+    ifelse(y_labels, 
+           axis(2, at=seq(0, 0.35, 0.05), labels = seq(0, 0.35, 0.05)), 
+           axis(2, at=seq(0, 0.35, 0.05)))
+   
+  
+  #grid(10, 10)
+  par(xpd=F)
+  abline(h = seq(0, 0.35, 0.05), lty = 2, col = "grey")
+  abline(v = 1:10, lty = 2, col = "grey")
   
   # first digit synthetic 
   for (elec in 1:10) 
@@ -179,6 +194,5 @@ plot_digits_1last <- function(votes_a, syn_data, title) {
   lines(benford_expected(3), type="o",
         lwd=2, lty=2, col="black")
   
-  text(2.3, 0.35, title, cex=1.5, font=2)
-  
+  text(2.5, 0.34, title, cex=1.5, font=2)
 }
