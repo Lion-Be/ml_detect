@@ -23,7 +23,8 @@ source("_functions.R")
 #' --------------------------------------
 
   # define function 
-  gen_data <- function(n_entities = 1000, turnout_mean = 0.7, turnout_sd = 0.1, 
+  gen_data <- function(n_entities = 1000, eligible = rep(seq(501, 1000, 1), 2), 
+                       turnout_mean = 0.7, turnout_sd = 0.1, 
                        partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
@@ -31,6 +32,7 @@ source("_functions.R")
                        seed = 12345) {  
     
     # n_entities = number of entities to create data for
+    # eligible = number of eligible voters per entitiy
     # turnout mean = mean turnout distribution
     # turnout_sd = sd turnout distribution
     # partyA_mean = mean support party A across entities
@@ -60,6 +62,11 @@ source("_functions.R")
                                  seq(0,1000,10))
       colnames(val_combs) <- c("baseline_a", "baseline_b")  
       KL_vec <- rep(NA, nrow(val_combs))
+      
+      # optimize for constants baseline_a and baseline_b such that 
+      # they minimize distance between simulated eligible-vector and 
+      # empirical eligible-vector (euclidean distance)
+      ED_vec <- rep(NA, nrow(val_combs))
       
       for (val in 1:nrow(val_combs)) {
         
@@ -119,13 +126,32 @@ source("_functions.R")
                                 mu2 = mu_val, sigma2 = vcov_val,
                                 method="KL")
         
+        # calculate euclidean distance 
+        ED_vec[val] <- distance(sort(l_total), sort(eligible), 
+                                method="euclidean")
+        
         if (val %% 1000 == 0)
           print(str_c("optimization progress: ", val, " out of ", nrow(val_combs)))
         
       } # end optimization
      
-      val_opt <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),]
-    
+      # find value combination for baseline_a and baseline_b that 
+      # minimizes summed up KL and ED distance
+      val_combs$KL_relpos <- val_combs$ED_relpos <- NA
+      for (val in 1:nrow(val_combs)) {
+        if (length(which(sort(KL_vec) == KL_vec[val])) > 0)
+          val_combs$KL_relpos[val] <- which(sort(KL_vec) == KL_vec[val])
+        if (length(which(sort(ED_vec) == ED_vec[val])) > 0)
+          val_combs$ED_relpos[val] <- which(sort(ED_vec) == ED_vec[val])
+      }
+      val_combs$dist_sum <- val_combs$KL_relpos + val_combs$ED_relpos
+      
+      val_combs <- val_combs[-which(is.na(val_combs$dist_sum)),]
+      val_opt <- val_combs[which(val_combs$dist_sum == min(val_combs$dist_sum)),]
+      
+      # val_optKL <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),]
+      # val_optED <- val_combs[which(ED_vec == ED_vec[order(ED_vec)][1]),]
+      
     
     #' ----------------------------------------------
     # (ii) generate n=n_elections datasets ----------
@@ -374,7 +400,7 @@ source("_functions.R")
          
         if (data_type == "full") {
         
-          colnames(data) <- c("id", "l_total", "votes_total", "votes_a", "votes_b",  
+          colnames(data) <- c("id", "eligible", "votes_total", "votes_a", "votes_b",  
                               "non_voters", "turnout", "share_A", "share_B")  
           data_list[[election]] <- data
           
@@ -423,7 +449,7 @@ source("_functions.R")
 #' ------------------------------------------------------------------ 
     
   #' ------------------------
-  # 2.0 empirical data ------
+  # 2.1 empirical data ------
   #' ------------------------
   
     # in general: 
@@ -431,9 +457,9 @@ source("_functions.R")
     # entities with NAs are excluded
     # when turnout is higher than 1, it set to 1
   
-    #' -------------------------------------------
-    # 2.1 Venezuela, recall referendum 2004 ------
-    #' -------------------------------------------
+    #' ---------------------------------------------
+    # 2.1.1 Venezuela, recall referendum 2004 ------
+    #' ---------------------------------------------
   
       #' ------------------------
       # empirical
@@ -464,9 +490,9 @@ source("_functions.R")
         
         
         
-      #' --------------------------------------------
-      # 2.2 Russia, presidential election 2012 ------
-      #' --------------------------------------------
+      #' ----------------------------------------------
+      # 2.1.2 Russia, presidential election 2012 ------
+      #' ----------------------------------------------
       
         #' ------------------------
         # empirical
@@ -493,9 +519,9 @@ source("_functions.R")
         
           
       
-      #' --------------------------------------------
-      # 2.3 Uganda, presidential election 2011 ------
-      #' --------------------------------------------
+      #' ----------------------------------------------
+      # 2.1.3 Uganda, presidential election 2011 ------
+      #' ----------------------------------------------
       
         #' ------------------------
         # empirical
@@ -537,9 +563,9 @@ source("_functions.R")
         
           
       
-      #' ----------------------------------------------
-      # 2.4 Austria, parliamentary election 2008 ------
-      #' ----------------------------------------------
+      #' ------------------------------------------------
+      # 2.1.4 Austria, parliamentary election 2008 ------
+      #' ------------------------------------------------
       
         #' ------------------------
         # empirical
@@ -547,6 +573,7 @@ source("_functions.R")
         
           aus08 <- read_excel("U:/PhD Electoral Fraud/Data/Austria2008_adjusted.xls")
           aus08$turnout <- aus08$`Wahl-\nbeteil-\nigung\nin %` / 100
+          aus08$eligible <- aus08$`Wahlbe- \nrechtigte`
           aus08$share_spo <- aus08$`%...9`/ 100
           aus08$share_ovp <- aus08$`%...11`/ 100
           
@@ -559,6 +586,7 @@ source("_functions.R")
         #' ------------------------
         
           aus08_syn <- gen_data(n_entities = nrow(aus08),
+                                eligible = aus08$eligible,
                                 turnout_mean = mean(aus08$turnout), 
                                 turnout_sd = sd(aus08$turnout), 
                                 partyA_mean = mean(aus08$share_spo), 
@@ -569,9 +597,9 @@ source("_functions.R")
                                 n_elections = "10"
                                 )
           
-      #' --------------------------------------------------
-      # 2.5 Spain, European Parliament election 2019 ------
-      #' --------------------------------------------------
+      #' ----------------------------------------------------
+      # 2.1.5 Spain, European Parliament election 2019 ------
+      #' ----------------------------------------------------
       
         #' ------------------------
         # empirical
@@ -590,9 +618,9 @@ source("_functions.R")
         #' ------------------------
         
           
-      #' ------------------------------------------
-      # 2.6 Finland, municipal election 2017 ------
-      #' ------------------------------------------
+      #' --------------------------------------------
+      # 2.1.6 Finland, municipal election 2017 ------
+      #' --------------------------------------------
   
         #' ------------------------
         # empirical
@@ -611,61 +639,138 @@ source("_functions.R")
         #' ------------------------
         # synthetic
         #' ------------------------
+     
           
           
+  #' ---------------------
+  # 2.2 comparisons ------
+  #' ---------------------     
+    
+    #' -------------------------------------
+    # 2.2.1 eligible voters per entity -----
+    #' -------------------------------------
+          
+      h1 <- hist(aus08$eligible, breaks=100)
+      h2 <- hist(aus08_syn[[1]]$eligible, breaks=100)
+      plot(h1, col=rgb(0,0,1,1/4), 
+           xlim = c(0, max(aus08$eligible, rep(seq(501, 1000, 1), 2))), 
+           ylim = c(0, max(h1$counts, h2$counts)), 
+           main = "Empirical vs. simulated distribution of eligible voters")  
+      plot(h2, col=rgb(1,0,0,1/4), 
+           xlim=c(0, max(aus08_syn[[1]]$eligible, rep(seq(501, 1000, 1), 2))), 
+           add=T)
       
-  #' ----------------
-  # 2.1 digits ------
-  #' ----------------
-  
-    # how to enhance plots?
-    # - add empirical distributions to this
-    # - add many simulated curves here to show variability of clean elections
-  
-  
-    plot_digits(fin17$kok_votes, fin17$sdp_votes)
-  
-  #' ----------------------------------
-  # 2.2 logarithmic turnout rate ------
-  #' ----------------------------------
-  
-    par(mfrow=c(1,1))
+      
+          
+    #' ----------------
+    # 2.1 digits ------
+    #' ----------------
     
-    # what is the theoretical expectation here? is there one?
-    
-    log_turnout <- log(bbs$votes_total / (bbs$l_total - bbs$votes_total))
-    log_turnoutR <- log_turnout - mean(log_turnout)
-    d_log_turnoutR <- density(log_turnoutR)
-    
-    plot(d_log_turnoutR, lwd=2, xlab="tau - mean(tau)", main="Logarithmic Turnout Rate", col="darkgreen")  
-  
-  
-  
-  #' -------------------------------------------------------
-  # 2.3 bivariate turnout and vote share distribution ------
-  #' -------------------------------------------------------
-  
-    ### ist there a continuous density estimated?
-    ### what I want is amybe a 100 x 100 discrete histogram?
-    ### maybe continuous density estimation blurrs the picture
-    
-    par(mfrow=c(1,1))
-    
-    rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
-    r <- rf(32)
-    
-    # empty image with baseline color
-    x <- list()
-    x$x <- seq(0,10,1)
-    x$y <- seq(0,10,1)
-    x$z <- matrix(rep(0,100), nrow=10, ncol=10)
-   
-    # artifical data
-    image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
-    k <- kde2d(fin17$turnout, fin17$kok_share, n=100)
-    image(k, col=r, add = T)
+      # how to enhance plots?
+      # - add empirical distributions to this
+      # - add many simulated curves here to show variability of clean elections
     
     
+      plot_digits_all(aus08_syn[[1]]$votes_a, aus08_syn[[1]]$votes_b)
+      plot_digits_1last(aus08$SPÖ, aus08_syn)
+      
+      
+      
+      tikz('digit_comparisons.tex', standAlone = TRUE, width=9, height=5)
+      
+      par(mfrow = c(2, 3),     # 2x3 layout
+          oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
+          mar = c(1, 1, 0, 0), # space for one row of text at ticks and to separate plots
+          mgp = c(2, 1, 0),
+          xpd = F)  
+      
+      # Austria 2008
+      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+                        ylab = "Relative Frequency", y_axis = T, y_labels = T, 
+                        x_axis = F, x_labels = F)
+      
+      # Country 2, 3
+      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+                        y_axis = F, x_axis = F)
+      
+      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+                        y_axis = F, x_axis = F)
+      
+      # Country 4
+      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", ylab = "Relative Frequency", xlab = "Number",
+                        y_axis = T, y_labels = T, x_axis = T, x_labels = T)
+      
+      # Country 5, 6
+      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+                        y_axis = F, x_axis = T, x_labels = T)
+      
+      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+                        y_axis = F, x_axis = T, x_labels = T)
+      
+      box("outer")
+      
+      
+      dev.off()
+      tools::texi2dvi('digit_comparisons.tex',pdf=T)
+      system(paste(getOption('pdfviewer'),'digit_comparisons.pdf'))
+      
+      
+      tikz('digit_comparisons_legend.tex', standAlone = TRUE, width=9, height=5)
+      
+      par(mfrow = c(1, 1))
+      plot(1, type="n", axes = F, xlab="", ylab="", xlim=c(0, 10), ylim=c(0, 10))
+      legend(5,5, c("First Digit Theoretical", "First Digit Empirical", "First Digit Synthetic", 
+                    "Last Digit Theoretical", "Last Digit Empirical", "Last Digit Synthetic"), 
+             col=c("black", "orange", "lightgrey", "black", "blue", "lightgrey"), 
+             lwd=rep(2,6), lty=c(1,1,1,2,2,2), pch=rep(1,6), bty="n")
+      
+      dev.off()
+      tools::texi2dvi('digit_comparisons_legend.tex',pdf=T)
+      system(paste(getOption('pdfviewer'),'digit_comparisons_legend.pdf'))
+      
+      
+      
+    #' ----------------------------------
+    # 2.2 logarithmic turnout rate ------
+    #' ----------------------------------
+    
+      par(mfrow=c(1,1))
+      
+      # what is the theoretical expectation here? is there one?
+      
+      log_turnout <- log(bbs$votes_total / (bbs$l_total - bbs$votes_total))
+      log_turnoutR <- log_turnout - mean(log_turnout)
+      d_log_turnoutR <- density(log_turnoutR)
+      
+      plot(d_log_turnoutR, lwd=2, xlab="tau - mean(tau)", main="Logarithmic Turnout Rate", col="darkgreen")  
+    
+    
+    
+    #' -------------------------------------------------------
+    # 2.3 bivariate turnout and vote share distribution ------
+    #' -------------------------------------------------------
+    
+      ### ist there a continuous density estimated?
+      ### what I want is amybe a 100 x 100 discrete histogram?
+      ### maybe continuous density estimation blurrs the picture
+      
+      par(mfrow=c(1,1))
+      
+      rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+      r <- rf(32)
+      
+      # empty image with baseline color
+      x <- list()
+      x$x <- seq(0,10,1)
+      x$y <- seq(0,10,1)
+      x$z <- matrix(rep(0,100), nrow=10, ncol=10)
+     
+      # artifical data
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
+      k <- kde2d(aus08_syn[[1]]$turnout, aus08_syn[[1]]$share_A, n=100)
+      image(k, col=r, add = T)
+      
+      
   
   
   
