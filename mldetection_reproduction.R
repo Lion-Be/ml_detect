@@ -5,7 +5,7 @@
 
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
-              "stringr", "dplyr", "readxl", "tikzDevice")
+              "stringr", "dplyr", "readxl", "tikzDevice", "distantia")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -594,7 +594,7 @@ source("_functions.R")
                                 partyB_mean = mean(aus08$share_ovp), 
                                 partyB_sd = sd(aus08$share_ovp),
                                 fraud_type = "clean",
-                                n_elections = "10"
+                                n_elections = 1
                                 )
           
       #' ----------------------------------------------------
@@ -666,49 +666,52 @@ source("_functions.R")
     # 2.1 digits ------
     #' ----------------
     
-      # how to enhance plots?
-      # - add empirical distributions to this
-      # - add many simulated curves here to show variability of clean elections
-    
-    
       plot_digits_all(aus08_syn[[1]]$votes_a, aus08_syn[[1]]$votes_b)
       plot_digits_1last(aus08$SPÖ, aus08_syn)
       
+      tikz('digit_comparisons.tex', standAlone = TRUE, width=9, height=6)
       
-      
-      tikz('digit_comparisons.tex', standAlone = TRUE, width=9, height=5)
-      
-      par(mfrow = c(2, 3),     # 2x3 layout
-          oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
-          mar = c(1, 1, 0, 0), # space for one row of text at ticks and to separate plots
-          mgp = c(2, 1, 0),
-          xpd = F)  
-      
-      # Austria 2008
-      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
-                        ylab = "Relative Frequency", y_axis = T, y_labels = T, 
-                        x_axis = F, x_labels = F)
-      
-      # Country 2, 3
-      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
-                        y_axis = F, x_axis = F)
-      
-      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
-                        y_axis = F, x_axis = F)
-      
-      # Country 4
-      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", ylab = "Relative Frequency", xlab = "Number",
-                        y_axis = T, y_labels = T, x_axis = T, x_labels = T)
-      
-      # Country 5, 6
-      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
-                        y_axis = F, x_axis = T, x_labels = T)
-      
-      plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
-                        y_axis = F, x_axis = T, x_labels = T)
-      
-      box("outer")
-      
+        par(mfrow = c(2, 3),     # 2x3 layout
+            oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
+            mar = c(0, 2, 1, 0), # space for one row of text at ticks and to separate plots
+            mgp = c(2, 1, 0),
+            xpd = F)  
+        
+        # Austria 2008
+        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+                          ylab = "Relative Frequency", y_axis = T, y_labels = T, 
+                          x_axis = F, x_labels = F)
+        
+        text(3.5, 0.29, "First Digit", cex=1.5)
+        text(2.1, 0.07, "Last Digit", cex=1.5)
+        
+        # Country 2
+        par(mar = c(0, 1, 1, 0))
+        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+                          y_axis = F, x_axis = F)
+        
+        # Country 3
+        par(mar = c(0, 1, 1, 1))
+        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+                          y_axis = F, x_axis = F)
+        
+        # Country 4
+        par(mar = c(2, 2, 1, 0))
+        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", ylab = "Relative Frequency", xlab = "Number",
+                          y_axis = T, y_labels = T, x_axis = T, x_labels = T)
+        
+        # Country 5
+        par(mar = c(2, 1, 1, 0))
+        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+                          y_axis = F, x_axis = T, x_labels = T)
+        
+        # Country 6
+        par(mar = c(2, 1, 1, 1))
+        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+                          y_axis = F, x_axis = T, x_labels = T)
+        
+        box("outer")
+        
       
       dev.off()
       tools::texi2dvi('digit_comparisons.tex',pdf=T)
@@ -717,21 +720,58 @@ source("_functions.R")
       
       tikz('digit_comparisons_legend.tex', standAlone = TRUE, width=9, height=5)
       
-      par(mfrow = c(1, 1))
-      plot(1, type="n", axes = F, xlab="", ylab="", xlim=c(0, 10), ylim=c(0, 10))
-      legend(5,5, c("First Digit Theoretical", "First Digit Empirical", "First Digit Synthetic", 
-                    "Last Digit Theoretical", "Last Digit Empirical", "Last Digit Synthetic"), 
-             col=c("black", "orange", "lightgrey", "black", "blue", "lightgrey"), 
-             lwd=rep(2,6), lty=c(1,1,1,2,2,2), pch=rep(1,6), bty="n")
+        par(mfrow = c(1, 1))
+        plot(1, type="n", axes = F, xlab="", ylab="", xlim=c(0, 10), ylim=c(0, 10))
+        legend(5,8.5, c("First Digit Theoretical", "First Digit Empirical", "First Digit Synthetic", 
+                      "Last Digit Theoretical", "Last Digit Empirical", "Last Digit Synthetic"), 
+               col=c("black", "orange", "lightgrey", "black", "blue", "lightgrey"), 
+               lwd=rep(2,6), lty=c(1,1,1,2,2,2), pch=c(16, 16, 16, 1, 1, 1), cex=2, bty="n")
       
       dev.off()
       tools::texi2dvi('digit_comparisons_legend.tex',pdf=T)
       system(paste(getOption('pdfviewer'),'digit_comparisons_legend.pdf'))
       
       
+    #' -------------------------------------------------------
+    # 2.2 bivariate turnout and vote share distribution ------
+    #' -------------------------------------------------------
+      
+      par(mfrow = c(2, 2),     # 2x3 layout
+          oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
+          mar = c(0, 2, 1, 0), # space for one row of text at ticks and to separate plots
+          mgp = c(2, 1, 0),
+          xpd = F)  
+      
+      rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+      r <- rf(30)
+      
+      # empty image with baseline color
+      x <- list()
+      x$x <- seq(0,10,1)
+      x$y <- seq(0,10,1)
+      x$z <- matrix(rep(0,100), nrow=10, ncol=10)
+      
+        #' -----------------------
+        # AUstria 2008
+        #' -----------------------
+      
+          # empirical
+          image(x, col=r[1], xlim=c(0,1), ylim=c(0,1))    
+          k <- kde2d(aus08$turnout, aus08$share_spo, n=50)
+          image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
+          text(0.2, 0.8, "Russia 2012", col="white")
+          
+          # synthetic
+          image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxs="n")    
+          k <- kde2d(aus08_syn[[1]]$turnout, aus08_syn[[1]]$share_A, n=50)
+          image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxs="n", add=T)
+          text(0.2, 0.8, "Russia 2012", col="white")
+      
+      
+      
       
     #' ----------------------------------
-    # 2.2 logarithmic turnout rate ------
+    # 2.3 logarithmic turnout rate ------
     #' ----------------------------------
     
       par(mfrow=c(1,1))
@@ -746,40 +786,7 @@ source("_functions.R")
     
     
     
-    #' -------------------------------------------------------
-    # 2.3 bivariate turnout and vote share distribution ------
-    #' -------------------------------------------------------
-    
-      ### ist there a continuous density estimated?
-      ### what I want is amybe a 100 x 100 discrete histogram?
-      ### maybe continuous density estimation blurrs the picture
-      
-      par(mfrow=c(1,1))
-      
-      rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
-      r <- rf(32)
-      
-      # empty image with baseline color
-      x <- list()
-      x$x <- seq(0,10,1)
-      x$y <- seq(0,10,1)
-      x$z <- matrix(rep(0,100), nrow=10, ncol=10)
-     
-      # artifical data
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), xlab="Turnout", ylab="Vote Share Candidate A", main="Turnout and Vote Share Distribution")
-      k <- kde2d(aus08_syn[[1]]$turnout, aus08_syn[[1]]$share_A, n=100)
-      image(k, col=r, add = T)
-      
-      
   
-  
-  
-  
-  
-        
-    
-    
-        
 
 
 
