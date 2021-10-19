@@ -144,37 +144,37 @@ plot_digits_1last <- function(votes_a, syn_data, title=" ", ylab = " ", xlab = "
   # first digit theory
   par(xpd=NA)
   plot(benford_expected(1), main="", ylab = ylab, xlab = xlab, 
-       axes = F, bty="n", 
+       cex.lab = 1.5, axes = F, bty="n", pch=16,
        type="o", lwd=1, ylim=c(0,0.35), labels=F)
   
   if (x_axis)
     ifelse(x_labels, 
-           axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9")), 
-           axis(1, at=1:10, labels = rep(" ", 10)))
+           axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"), cex.axis = 1.3), 
+           axis(1, at=1:10, labels = rep(" ", 10), cex.axis = 1.3))
     
   if (y_axis)
     ifelse(y_labels, 
-           axis(2, at=seq(0, 0.35, 0.05), labels = seq(0, 0.35, 0.05)), 
-           axis(2, at=seq(0, 0.35, 0.05)))
+           axis(2, at=seq(0, 0.35, 0.05), labels = seq(0, 0.35, 0.05), cex.axis = 1.3), 
+           axis(2, at=seq(0, 0.35, 0.05), cex.axis = 1.3))
    
   
-  #grid(10, 10)
+  # grid
   par(xpd=F)
-  abline(h = seq(0, 0.35, 0.05), lty = 2, col = "grey")
-  abline(v = 1:10, lty = 2, col = "grey")
+  segments(1:10, rep(0,10), 1:10, 0.35, lty = 2, col = "grey")
+  segments(rep(1,10), seq(0, 0.35, 0.05), rep(10,10), seq(0, 0.35, 0.05), lty = 2, col = "grey")
   
   # first digit synthetic 
   for (elec in 1:10) 
     lines(c(NA, table(extract_digit(syn_data[[elec]]$votes_a, 1))/length(extract_digit(syn_data[[elec]]$votes_a, 1))), type="o",
-          lwd=2, col="lightgrey")
+          lwd=2, pch=16, col="lightgrey")
   
   # first digit empirical
   lines(c(NA, table(extract_digit(votes_a, 1))/length(extract_digit(votes_a, 1))), type="o",
-        lwd=2, col="orange")
+        lwd=2, pch=16, col="orange")
   
   # first digit theory (pronounce again)
   lines(benford_expected(1), type="o",
-        lwd=2, col="black")
+        lwd=2, pch=16, col="black")
   
   
   # ------------
