@@ -29,7 +29,7 @@ source("_functions.R")
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
                        agg_factor = 1, n_elections = 1000, data_type = "full",
-                       seed = 12345) {  
+                       baseline_A = NA, baseline_B = NA, seed = 12345) {  
     
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
@@ -47,112 +47,123 @@ source("_functions.R")
     # agg_factor = aggregation factor, n_entities/agg_factor is the number
     #              of entities data is aggregated towards
     #              no aggregation for agg_factor = 1
-    # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
     # n_elections = number of elections to generate 
+    # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
+    # baseline_A/B = baseline values to scale BF distribution. If not specified, function optimizes for these
   
+    set.seed(seed)
+    
     #' ----------------------------------------
     #  (i) optimize for baseline values -------
     #' ----------------------------------------
-    
-      set.seed(seed)
-     
+   
       # optimize for constants baseline_a and baseline_b such that 
       # they minimize distance to multivariate normal p(turnout, party share)
       val_combs <- expand.grid(seq(0,1000,10), 
                                  seq(0,1000,10))
       colnames(val_combs) <- c("baseline_a", "baseline_b")  
-      KL_vec <- rep(NA, nrow(val_combs))
+   
+      if (is.na(baseline_A) & is.na(baseline_B)) {
+        
+        KL_vec <- rep(NA, nrow(val_combs))
       
-      # optimize for constants baseline_a and baseline_b such that 
-      # they minimize distance between simulated eligible-vector and 
-      # empirical eligible-vector (euclidean distance)
-      ED_vec <- rep(NA, nrow(val_combs))
-      
-      for (val in 1:nrow(val_combs)) {
+        # optimize for constants baseline_a and baseline_b such that 
+        # they minimize distance between simulated eligible-vector and 
+        # empirical eligible-vector (euclidean distance)
+        # ED_vec <- rep(NA, nrow(val_combs))
         
-        # generate variable following Benford's law
-        X_a <- 10 ^ runif(n_entities, 0, 1) 
-        X_b <- 10 ^ runif(n_entities, 0, 1) 
-        
-        # constants for scaling
-        baseline_a <- val_combs[val, "baseline_a"]
-        baseline_b <- val_combs[val, "baseline_b"]
-        
-        # latent support rates
-        l_support_a <- as.integer(baseline_a * X_a) 
-        l_support_b <- as.integer(baseline_b * X_b)
-        
-        # construct vote totals from turnout distribution 
-        turnout <- rtruncnorm(n_entities, 0, 1, turnout_mean, turnout_sd)
+        for (val in 1:nrow(val_combs)) {
+          
+          # generate variable following Benford's law
+          X_a <- 10 ^ runif(n_entities, 0, 1) 
+          X_b <- 10 ^ runif(n_entities, 0, 1) 
+          
+          # constants for scaling
+          baseline_a <- val_combs[val, "baseline_a"]
+          baseline_b <- val_combs[val, "baseline_b"]
+          
+          # latent support rates
+          l_support_a <- as.integer(baseline_a * X_a) 
+          l_support_b <- as.integer(baseline_b * X_b)
+          
+          # construct vote totals from turnout distribution 
+          turnout <- rtruncnorm(n_entities, 0, 1, turnout_mean, turnout_sd)
+         
+          l_total <- l_support_a + l_support_b # total latent support
+          l_share_a <- l_support_a/(l_support_a+l_support_b)
+          l_share_b <- 1-l_share_a
+          
+          votes_all <- l_total * turnout
+          votes_a <- round(votes_all * l_share_a, digits = 0)
+          votes_b <- round(votes_all * l_share_b, digits = 0)
+          
+          ### turnout, votes_a, votes_b are the final variables
+          ### do they follow the characteristics that they should?
+          
+          ### basically: just perform my protocol for data construction 
+          ### then look which baseline values minimize KL-distance between two 
+          ### multivariate distributions p(turnout, shareA), where shareA
+          ### is once defined via empirical values and once defined via 
+          ### what is implied by baseline_a and baseline_b
+          ### so I find the values of baseline_a and baseline_b that in the end
+          ### resemble the empirical vote shares
+          
+          # define multivariate normal based on value combination chosen 
+          vcov_val <- matrix(c(var(turnout), 
+                               cov(turnout, l_share_a), 
+                               cov(turnout, l_share_a), 
+                               var(l_share_a)),
+                             nrow=2, ncol=2)
+                                
+          mu_val <- c(mean(turnout), mean(l_share_a))
+          
+          # define multivariate normal based on empirical input values
+          vcov_emp <- matrix(c(turnout_sd^2, 
+                               0,
+                               0,
+                               partyA_sd^2),
+                             nrow=2, ncol=2)
+          mu_emp <- c(turnout_mean, partyA_mean)
+          
+          # calculate symmetric KL divergence
+          KL_vec[val] <- normdiff(mu1 = mu_emp, sigma1 = vcov_emp,
+                                  mu2 = mu_val, sigma2 = vcov_val,
+                                  method="KL")
+          
+          # calculate euclidean distance 
+          # ED_vec[val] <- distance(sort(l_total), sort(eligible), 
+          #                        method="euclidean")
+          
+          if (val %% 1000 == 0)
+            print(str_c("optimization progress: ", val, " out of ", nrow(val_combs)))
+          
+        } # end optimization
+      } # end if (is.na(baseline_A) & is.na(baseline_B))
        
-        l_total <- l_support_a + l_support_b # total latent support
-        l_share_a <- l_support_a/(l_support_a+l_support_b)
-        l_share_b <- 1-l_share_a
-        
-        votes_all <- l_total * turnout
-        votes_a <- round(votes_all * l_share_a, digits = 0)
-        votes_b <- round(votes_all * l_share_b, digits = 0)
-        
-        ### turnout, votes_a, votes_b are the final variables
-        ### do they follow the characteristics that they should?
-        
-        ### basically: just perform my protocol for data construction 
-        ### then look which baseline values minimize KL-distance between two 
-        ### multivariate distributions p(turnout, shareA), where shareA
-        ### is once defined via empirical values and once defined via 
-        ### what is implied by baseline_a and baseline_b
-        ### so I find the values of baseline_a and baseline_b that in the end
-        ### resemble the empirical vote shares
-        
-        # define multivariate normal based on value combination chosen 
-        vcov_val <- matrix(c(var(turnout), 
-                             cov(turnout, l_share_a), 
-                             cov(turnout, l_share_a), 
-                             var(l_share_a)),
-                           nrow=2, ncol=2)
-                              
-        mu_val <- c(mean(turnout), mean(l_share_a))
-        
-        # define multivariate normal based on empirical input values
-        vcov_emp <- matrix(c(turnout_sd^2, 
-                             0,
-                             0,
-                             partyA_sd^2),
-                           nrow=2, ncol=2)
-        mu_emp <- c(turnout_mean, partyA_mean)
-        
-        # calculate symmetric KL divergence
-        KL_vec[val] <- normdiff(mu1 = mu_emp, sigma1 = vcov_emp,
-                                mu2 = mu_val, sigma2 = vcov_val,
-                                method="KL")
-        
-        # calculate euclidean distance 
-        ED_vec[val] <- distance(sort(l_total), sort(eligible), 
-                                method="euclidean")
-        
-        if (val %% 1000 == 0)
-          print(str_c("optimization progress: ", val, " out of ", nrow(val_combs)))
-        
-      } # end optimization
-     
       # find value combination for baseline_a and baseline_b that 
       # minimizes summed up KL and ED distance
-      val_combs$KL_relpos <- val_combs$ED_relpos <- NA
-      for (val in 1:nrow(val_combs)) {
-        if (length(which(sort(KL_vec) == KL_vec[val])) > 0)
-          val_combs$KL_relpos[val] <- which(sort(KL_vec) == KL_vec[val])
-        if (length(which(sort(ED_vec) == ED_vec[val])) > 0)
-          val_combs$ED_relpos[val] <- which(sort(ED_vec) == ED_vec[val])
-      }
-      val_combs$dist_sum <- val_combs$KL_relpos + val_combs$ED_relpos
-      
-      val_combs <- val_combs[-which(is.na(val_combs$dist_sum)),]
-      val_opt <- val_combs[which(val_combs$dist_sum == min(val_combs$dist_sum)),]
-      
-      # val_optKL <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),]
+      # val_combs$KL_relpos <- val_combs$ED_relpos <- NA
+      # for (val in 1:nrow(val_combs)) {
+      #   if (length(which(sort(KL_vec) == KL_vec[val])) > 0)
+      #     val_combs$KL_relpos[val] <- which(sort(KL_vec) == KL_vec[val])
+      #   if (length(which(sort(ED_vec) == ED_vec[val])) > 0)
+      #     val_combs$ED_relpos[val] <- which(sort(ED_vec) == ED_vec[val])
+      # }
+      # val_combs$dist_sum <- val_combs$KL_relpos + val_combs$ED_relpos
+      # 
+      # val_combs <- val_combs[-which(is.na(val_combs$dist_sum)),]
+      # val_opt <- val_combs[which(val_combs$dist_sum == min(val_combs$dist_sum)),]
+    
+    ifelse(is.na(baseline_A) & is.na(baseline_B),
+           val_opt <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),],
+           {val_opt <- val_combs[1,]
+           val_opt[1, "baseline_a"] <- baseline_A
+           val_opt[1, "baseline_b"] <- baseline_B}
+           )  
+    
       # val_optED <- val_combs[which(ED_vec == ED_vec[order(ED_vec)][1]),]
       
-    
+   
     #' ----------------------------------------------
     # (ii) generate n=n_elections datasets ----------
     #' ----------------------------------------------
@@ -455,7 +466,7 @@ source("_functions.R")
     # in general: 
     # entities with an electorate < 100 are excluded
     # entities with NAs are excluded
-    # when turnout is higher than 1, it set to 1
+    # when turnout is higher than 1, is set to 1
   
     #' ---------------------------------------------
     # 2.1.1 Venezuela, recall referendum 2004 ------
@@ -472,11 +483,15 @@ source("_functions.R")
         # rep200407 = number of eligible voters  
         ven04$votes_all <- ven04$rrp_si+ven04$rrp_no+ven04$rrp_nulo
         ven04$turnout <- ven04$votes_all / ven04$rep200407
+        ven04$eligible <- ven04$rep200407
         ven04$share_si <- ven04$rrp_si / (ven04$rrp_si + ven04$rrp_no)
         ven04$share_no <- ven04$rrp_no / (ven04$rrp_si + ven04$rrp_no)
     
         # exclude units with an electorate < 100
         ven04 <- ven04[-which(ven04$rep200407 < 100),]
+        
+        # exclude units with NAs
+        ven04 <- ven04[-which(is.na(ven04$share_no)),]
         
         # set turnout > 1 to 1
         ven04$turnout[which(ven04$turnout > 1)] <- 1
@@ -486,8 +501,69 @@ source("_functions.R")
       # synthetic
       #' ------------------------
     
+        #' -------------------------------------------------------------------------
+        ### first: find fraud_incA and fraud_extA that resembles data most closely
+        #' -------------------------------------------------------------------------
         
+          fraud_values <- seq(0, 1, 0.01)
+          fraud_values <- expand.grid(fraud_values, fraud_values)
+          colnames(fraud_values) <- c("fraud_incA", "fraud_extA")
+          fraud_values$euc_distV <- fraud_values$euc_distT <- NA
+          # baseline_A = 870
+          # baseline_B = 430
+          
+          for (row in 1:nrow(fraud_values)) {
+            
+            ven04_syn <- gen_data(n_entities = nrow(ven04),
+                                  eligible = ven04$eligible,
+                                  turnout_mean = mean(ven04$turnout), 
+                                  turnout_sd = sd(ven04$turnout), 
+                                  partyA_mean = mean(ven04$share_no, na.rm=T), 
+                                  partyA_sd = sd(ven04$share_no, na.rm=T), 
+                                  partyB_mean = mean(ven04$share_si, na.rm=T), 
+                                  partyB_sd = sd(ven04$share_si, na.rm=T),
+                                  fraud_type = "bbs",
+                                  fraud_incA = fraud_values[row, "fraud_incA"],
+                                  fraud_extA = fraud_values[row, "fraud_extA"],
+                                  n_elections = 1, 
+                                  baseline_A = 870, 
+                                  baseline_B = 430
+                                  
+            )
+            
+            fraud_values[row, "euc_distV"] <- 
+              distance(sort(ven04$share_no), sort(ven04_syn[[1]]$share_A), method="euclidean")
+            
+            fraud_values[row, "euc_distT"] <- 
+              distance(sort(ven04$turnout), sort(ven04_syn[[1]]$turnout), method="euclidean")
+            
+            if (row %% 1000 == 0)
+              print(str_c("iteration ", val, " out of ", nrow(fraud_values)))
+            
+          }
+          
+          # which fraud values to use
+          ven04_valsV <- fraud_values[which(fraud_values$euc_distV == min(fraud_values$euc_distV)),]
+          ven04_valsT <- fraud_values[which(fraud_values$euc_distT == min(fraud_values$euc_distT)),]
+          
+          
+        #' -------------------------------------------------------------------------
+        ### second: generate synthetic data using these values
+        #' -------------------------------------------------------------------------
         
+          ven04_syn <- gen_data(n_entities = nrow(ven04),
+                                eligible = ven04$eligible,
+                                turnout_mean = mean(ven04$turnout), 
+                                turnout_sd = sd(ven04$turnout), 
+                                partyA_mean = mean(ven04$share_no, na.rm=T), 
+                                partyA_sd = sd(ven04$share_no, na.rm=T), 
+                                partyB_mean = mean(ven04$share_si, na.rm=T), 
+                                partyB_sd = sd(ven04$share_si, na.rm=T),
+                                fraud_type = "bbs",
+                                fraud_incA = 0.2,
+                                fraud_extA = 0.0,
+                                n_elections = 10)
+          
         
         
       #' ----------------------------------------------
@@ -504,8 +580,13 @@ source("_functions.R")
           ru12$`Number of invalid ballots`[which(ru12$`Number of invalid ballots`=="A")] <- 0
           ru12$votes_all <- ru12$`Number of valid ballots` + as.numeric(ru12$`Number of invalid ballots`)
           ru12$turnout <- ru12$votes_all / ru12$`The number of voters included in voters list` 
+          ru12$eligible <- ru12$`The number of voters included in voters list` 
           ru12$putin <- ru12$`Vladimir Putin`
-          ru12$share_putin <- ru12$putin / ru12$votes_all
+          ru12$share_putin <- gsub("%", "", ru12$...31)
+          ru12$share_putin <- as.numeric(ru12$share_putin) / 100
+          ru12$zyuganov <- as.numeric(ru12$`Gennady Andreyevich Zyuganov`)
+          ru12$share_zyuganov <- gsub("%", "", ru12$...25)
+          ru12$share_zyuganov <- as.numeric(ru12$share_zyuganov) / 100
           
           # exclude units with an electorate < 100
           ru12 <- ru12[-which(ru12$`The number of voters included in voters list` < 100),]
@@ -517,6 +598,72 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
+          #' -------------------------------------------------------------------------
+          ### first: find fraud_incA and fraud_extA that resembles data most closely
+          #' -------------------------------------------------------------------------
+          
+            fraud_values <- seq(0, 1, 0.01)
+            fraud_values <- expand.grid(fraud_values, fraud_values)
+            colnames(fraud_values) <- c("fraud_incA", "fraud_extA")
+            fraud_values$euc_distV <- fraud_values$euc_distT <- NA
+            # baseline_A = 560
+            # baseline_B = 230
+            
+            for (row in 1:nrow(fraud_values)) {
+              
+              ru12_syn <- gen_data(n_entities = nrow(ru12),
+                                    eligible = ru12$eligible,
+                                    turnout_mean = mean(ru12$turnout), 
+                                    turnout_sd = sd(ru12$turnout), 
+                                    partyA_mean = mean(ru12$share_putin, na.rm=T), 
+                                    partyA_sd = sd(ru12$share_putin, na.rm=T), 
+                                    partyB_mean = mean(ru12$share_zyuganov, na.rm=T), 
+                                    partyB_sd = sd(ru12$share_zyuganov, na.rm=T),
+                                    fraud_type = "bbs",
+                                    fraud_incA = fraud_values[row, "fraud_incA"],
+                                    fraud_extA = fraud_values[row, "fraud_extA"],
+                                    n_elections = 1, 
+                                    baseline_A = 560, 
+                                    baseline_B = 230
+                                    
+              )
+              
+              fraud_values[row, "euc_distV"] <- 
+                distance(sort(ven04$share_no), sort(ven04_syn[[1]]$share_A), method="euclidean")
+              
+              fraud_values[row, "euc_distT"] <- 
+                distance(sort(ven04$turnout), sort(ven04_syn[[1]]$turnout), method="euclidean")
+              
+              if (row %% 1000 == 0)
+                print(str_c("iteration ", row, " out of ", nrow(fraud_values)))
+              
+            }
+            
+            # which fraud values to use
+            ru12_valsV <- fraud_values[which(fraud_values$euc_distV == min(fraud_values$euc_distV)),]
+            ru12_valsT <- fraud_values[which(fraud_values$euc_distT == min(fraud_values$euc_distT)),]
+            
+            
+          #' -------------------------------------------------------------------------
+          ### second: generate synthetic data using these values
+          #' -------------------------------------------------------------------------
+          
+            ru12_syn <- gen_data(n_entities = nrow(ru12),
+                                  eligible = ru12$eligible,
+                                  turnout_mean = mean(ru12$turnout), 
+                                  turnout_sd = sd(ru12$turnout), 
+                                  partyA_mean = mean(ru12$share_putin), 
+                                  partyA_sd = sd(ru12$share_putin), 
+                                  partyB_mean = mean(ru12$share_zyuganov), 
+                                  partyB_sd = sd(ru12$share_zyuganov),
+                                  fraud_type = "bbs",
+                                  fraud_incA = 0.2,
+                                  fraud_extA = 0.0,
+                                  n_elections = 10)
+            
+            
+          
+          
           
       
       #' ----------------------------------------------
@@ -594,7 +741,7 @@ source("_functions.R")
                                 partyB_mean = mean(aus08$share_ovp), 
                                 partyB_sd = sd(aus08$share_ovp),
                                 fraud_type = "clean",
-                                n_elections = 1
+                                n_elections = 10
                                 )
           
       #' ----------------------------------------------------
@@ -607,7 +754,9 @@ source("_functions.R")
             
           esp19 <- read_excel("U:/PhD Electoral Fraud/Data/Spain_EP_2019.xlsx", skip = 5)
           esp19$turnout <- esp19$`Total votantes` / esp19$`Total censo electoral` 
+          esp19$eligible <- esp19$`Total votantes`
           esp19$share_psoe <- esp19$PSOE / esp19$`Votos válidos`
+          esp19$share_pp <- esp19$PP / esp19$`Votos válidos`
           
           # exclude units with an electorate < 100
           esp19 <- esp19[-which(esp19$`Total censo electoral` < 100),]
@@ -617,6 +766,19 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
+          esp19_syn <- gen_data(n_entities = nrow(esp19),
+                                eligible = aus08$eligible,
+                                turnout_mean = mean(esp19$turnout), 
+                                turnout_sd = sd(esp19$turnout), 
+                                partyA_mean = mean(esp19$share_psoe), 
+                                partyA_sd = sd(esp19$share_psoe), 
+                                partyB_mean = mean(esp19$share_pp), 
+                                partyB_sd = sd(esp19$share_pp),
+                                fraud_type = "clean",
+                                n_elections = 10
+          )
+          
+          
           
       #' --------------------------------------------
       # 2.1.6 Finland, municipal election 2017 ------
@@ -627,10 +789,22 @@ source("_functions.R")
         #' ------------------------
           
           fin17 <- read_excel("U:/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
+          
+          fin17$`Persons entitled to vote` <- as.numeric(fin17$`Persons entitled to vote`)
+          fin17$`Persons entitled to vote` <- as.numeric(gsub("[.]", "", fin17$`Persons entitled to vote`))
+          
+          fin17$`KOK Votes cast, total` <- as.numeric(fin17$`KOK Votes cast, total`)
+          fin17$`KOK Votes cast, total` <- as.numeric(gsub("[.]", "", fin17$`KOK Votes cast, total`))
+         
+          fin17$`SDP Votes cast, total` <- as.numeric(fin17$`SDP Votes cast, total`)
+          fin17$`SDP Votes cast, total` <- as.numeric(gsub("[.]", "", fin17$`SDP Votes cast, total`))
+          
           fin17$turnout <- as.numeric(fin17$`Voting turnout`) / 100
+          fin17$eligible <- as.numeric(fin17$`Persons entitled to vote`)
           fin17$kok_votes <- as.numeric(fin17$`KOK Votes cast, total`)
           fin17$sdp_votes <- as.numeric(fin17$`SDP Votes cast, total`)
           fin17$share_kok <- as.numeric(fin17$`KOK Proportion of all votes cast`) / 100
+          fin17$share_sdp <- as.numeric(fin17$`SDP Proportion of all votes cast`) / 100
           
           # exclude units with NAs in share_kok
           fin17 <- fin17[-which(is.na(fin17$share_kok)),]
@@ -640,6 +814,18 @@ source("_functions.R")
         # synthetic
         #' ------------------------
      
+          fin17_syn <- gen_data(n_entities = nrow(fin17),
+                                eligible = fin17$eligible,
+                                turnout_mean = mean(fin17$turnout), 
+                                turnout_sd = sd(fin17$turnout), 
+                                partyA_mean = mean(fin17$share_kok), 
+                                partyA_sd = sd(fin17$share_kok), 
+                                partyB_mean = mean(fin17$share_sdp), 
+                                partyB_sd = sd(fin17$share_sdp),
+                                fraud_type = "clean",
+                                n_elections = 10
+          )
+          
           
           
   #' ---------------------
@@ -685,19 +871,19 @@ source("_functions.R")
         text(3.5, 0.29, "First Digit", cex=1.5)
         text(2.1, 0.07, "Last Digit", cex=1.5)
         
-        # Country 2
+        # Spain 2019
         par(mar = c(0, 1, 1, 0))
-        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+        plot_digits_1last(esp19$PSOE, esp19_syn, title = "Spain 2019",
                           y_axis = F, x_axis = F)
         
-        # Country 3
+        # Finland 2017
         par(mar = c(0, 1, 1, 1))
-        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
+        plot_digits_1last(fin17$`KOK Votes cast, total`, fin17_syn, title = "Finland 2017",
                           y_axis = F, x_axis = F)
         
-        # Country 4
+        # Venezuela 2004
         par(mar = c(2, 2, 1, 0))
-        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", ylab = "Relative Frequency", xlab = "Number",
+        plot_digits_1last(ven04$rrp_no, ven04_syn, title = "Venezuela 2004", ylab = "Relative Frequency", xlab = "Number",
                           y_axis = T, y_labels = T, x_axis = T, x_labels = T)
         
         # Country 5
@@ -736,40 +922,68 @@ source("_functions.R")
     # 2.2 bivariate turnout and vote share distribution ------
     #' -------------------------------------------------------
       
-      par(mfrow = c(2, 2),     # 2x3 layout
-          oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
-          mar = c(0, 2, 1, 0), # space for one row of text at ticks and to separate plots
-          mgp = c(2, 1, 0),
-          xpd = F)  
+      tikz('scatter.tex', standAlone = T, width=7, height=7)
       
-      rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
-      r <- rf(30)
-      
-      # empty image with baseline color
-      x <- list()
-      x$x <- seq(0,10,1)
-      x$y <- seq(0,10,1)
-      x$z <- matrix(rep(0,100), nrow=10, ncol=10)
-      
-        #' -----------------------
-        # AUstria 2008
-        #' -----------------------
-      
-          # empirical
-          image(x, col=r[1], xlim=c(0,1), ylim=c(0,1))    
-          k <- kde2d(aus08$turnout, aus08$share_spo, n=50)
-          image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
-          text(0.2, 0.8, "Russia 2012", col="white")
+        par(mfrow = c(2, 2),     # 2x2 layout
+            oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
+            mar = c(2.8, 2.8, 2.8, 1), # space for one row of text at ticks and to separate plots
+            mgp = c(2, 1, 0),
+            xpd = NA)  
+        
+        rf <- colorRampPalette(rev(brewer.pal(11,'Spectral')))
+        r <- rf(30)
+        
+        # empty image with baseline color
+        x <- list()
+        x$x <- seq(0,10,1)
+        x$y <- seq(0,10,1)
+        x$z <- matrix(rep(0,100), nrow=10, ncol=10)
+        
+          #' -----------------------
+          # AUstria 2008
+          #' -----------------------
+        
+            # empirical
+            image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\% Votes for Winner", xaxt="n")    
+            k <- kde2d(ru12$turnout, ru12$share_putin, n=50)
+            image(k, col=r, xlim=c(0,1), ylim=c(0,1), xaxt="n", add=T)
+            text(0.23, 0.95, "Russia 2012, Empirical", col="white")
+            
+            # synthetic
+            par(mar = c(2.8, 1.5, 2.8, 2.3))
+            image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
+            k <- kde2d(ven04_syn[[1]]$turnout, ven04_syn[[1]]$share_A, n=50)
+            image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
+            text(0.23, 0.95, "Venezuela 2004, Synthetic", col="white")
+        
+            
+          #' -----------------------
+          # Russia 2012
+          #' -----------------------
+            
+            # empirical
+            par(mar = c(2.8, 2.8, 1, 1))
+            image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\%Votes for Winner", xlab="\\%Turnout")    
+            k <- kde2d(aus08$turnout, aus08$share_spo, n=50)
+            image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
+            text(0.23, 0.95, "Austria 2008, Empirical", col="white")
+            
+            # synthetic
+            par(mar = c(2.8, 1.5, 1, 2.3))
+            image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="\\%Turnout")    
+            k <- kde2d(aus08_syn[[1]]$turnout, aus08_syn[[1]]$share_A, n=50)
+            image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
+            text(0.23, 0.95, "Austria 2008, Synthetic", col="white")
+            
           
-          # synthetic
-          image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxs="n")    
-          k <- kde2d(aus08_syn[[1]]$turnout, aus08_syn[[1]]$share_A, n=50)
-          image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxs="n", add=T)
-          text(0.2, 0.8, "Russia 2012", col="white")
+          box("outer")
+        
+        dev.off()
+        tools::texi2dvi('scatter.tex',pdf=T)
+        system(paste(getOption('pdfviewer'),'scatter.pdf'))
       
-      
-      
-      
+        
+        
     #' ----------------------------------
     # 2.3 logarithmic turnout rate ------
     #' ----------------------------------
@@ -789,7 +1003,11 @@ source("_functions.R")
   
 
 
-
+##### which models to use for machine learning? Models that can do classification and prediction
+# kNN 
+# ridge, lasso
+# random Forest, BART
+# neural network
  
 
     
