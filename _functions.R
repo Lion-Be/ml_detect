@@ -42,25 +42,17 @@ benford_expected <- function(position){
 # extract first, second or last digit from vector of integers
 # e.g. extract(x, 1)
 # e.g. extract(x, 2)
-# e.g. extract(x, "last)
+# e.g. extract(x, "last")
 extract_digit <- function(x, digit){
   
   # commands for digit: 1, 2, "last"
   
+  if (digit == 1) 
+    digits <- as.numeric(substr(as.character(x), 1, 1))
   
-  library(benford.analysis) # for extract.digits
-  library(gsubfn) # for strapply
-  
-  if (digit == 1) {
-    digits <- extract.digits(x, number.of.digits = 1)[,2]
-  }
   
   if (digit == 2) {
-    digits <- extract.digits(x, number.of.digits = 2)[,2]
-    digits <- strapply(as.character(digits), ".", as.numeric)
-    for (i in 1:length(digits))
-      digits[i] <- digits[[i]][[2]]
-    digits <- unlist(digits)
+    digits <- as.numeric(substr(as.character(x), 2, 2))
   }
   
   if (digit == "last") {
@@ -75,6 +67,33 @@ extract_digit <- function(x, digit){
 
 # --------------------------------------------------------------------------- #
 
+# get chi^2 statistic for empirical digit distribution vs. Benford expectation
+
+benford_chi2 <- function(x, digit) {
+  
+  # commands for digit: 1, 2, "last"
+  
+  if (digit == 1)
+    for (number in 1:9) {
+      chi_square <- sum((((length(which(extract_digit(x, 1) == number)) / length(x)) - benford_expected(1)[number+1])^2) / benford_expected(1)[number+1])
+    }
+  
+  if (digit == 2)
+    for (number in 0:9) {
+      chi_square <- sum((((length(which(extract_digit(x, 2) == number)) / length(x)) - benford_expected(2)[number+1])^2) / benford_expected(2)[number+1])
+    }
+  
+  if (digit == "last")
+    for (number in 0:9) {
+      chi_square <- sum((((length(which(extract_digit(x, "last") == number)) / length(x)) - benford_expected(3)[number+1])^2) / benford_expected(3)[number+1])
+    }
+    
+  return(chi_square)
+}
+
+
+
+# --------------------------------------------------------------------------- #
 
 # get relative frequencies of digits from digit vector
 # e.g. rel.freq(extract(x,2))
