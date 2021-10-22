@@ -29,7 +29,7 @@ source("_functions.R")
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
                        agg_factor = 1, n_elections = 1000, data_type = "full",
-                       baseline_A = NA, baseline_B = NA, seed = 12345) {  
+                       baseline_A = NA, baseline_B = NA) {  
     
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
@@ -51,8 +51,7 @@ source("_functions.R")
     # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
     # baseline_A/B = baseline values to scale BF distribution. If not specified, function optimizes for these
   
-    set.seed(seed)
-    
+   
     #' ----------------------------------------
     #  (i) optimize for baseline values -------
     #' ----------------------------------------
@@ -408,57 +407,113 @@ source("_functions.R")
         #' -----------------------------------------------------------
         # store whole raw (or aggregated) data across all entities
         #' -----------------------------------------------------------
-         
-        if (data_type == "full") {
-        
+       
           colnames(data) <- c("id", "eligible", "votes_total", "votes_a", "votes_b",  
-                              "non_voters", "turnout", "share_A", "share_B")  
-          data_list[[election]] <- data
+                              "non_voters", "turnout", "share_A", "share_B")   
           
-        }
-        
-        if (data_type == "num_char") {
-        
-          #### MISSING 
-          # things like chi2 statistic of BL test
-          # fraction of 1 among first digit
-          # skewness/kurtosis of turnout distribution
-          # Wichtig: hier muss ich am Ende von gen_data() die outcome-Variable konstruieren, also n_tainted_votes
-        
-          data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
+          if (data_type == "full") 
+            data_list[[election]] <- data
+            
           
-          # fraud variables (y)
-          data_char$n_frauded <- n_frauded
-          data_char$fraud_incA <- fraud_incA
-          data_char$fraud_extA <- fraud_extA
-          data_char$fraud_incB <- fraud_incB
-          data_char$fraud_extB <- fraud_extB
           
-          # numerical characteristics (X)
-          data_char$bl1_frac1A <- length(which(extract_digit(data$votes_a, 1) == 1)) / length(data$votes_a) # partyA, fraction of '1' among first digit
-          data_char$bl1_frac1B <- length(which(extract_digit(data$votes_b, 1) == 1)) / length(data$votes_b) # partyA, fraction of '1' among first digit
-      
-          data_list[[election]] <- data_char 
+          if (data_type == "num_char") {
           
-        } # end if (data_type == "num_char")
-        
+            #### MISSING 
+            # things like chi2 statistic of BL test
+            # fraction of 1 among first digit
+            # skewness/kurtosis of turnout distribution
+            # Wichtig: hier muss ich am Ende von gen_data() die outcome-Variable konstruieren, also n_tainted_votes
+          
+            data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
+            
+            # fraud variables (y) 
+            data_char$n_frauded <- n_frauded
+            data_char$perc_frauded <- n_frauded / sum(votes_all)
+            data_char$fraud_incA <- fraud_incA
+            data_char$fraud_extA <- fraud_extA
+            data_char$fraud_incB <- fraud_incB
+            data_char$fraud_extB <- fraud_extB
+            
+            # numerical characteristics (X)
+            
+              # 1BL 
+              data_char$bl1_frac1A <- length(which(extract_digit(data$votes_a, 1) == 1)) / length(data$votes_a) # partyA, fraction of '1' among first digit
+              data_char$bl1_frac1B <- length(which(extract_digit(data$votes_b, 1) == 1)) / length(data$votes_b) # partyB, fraction of '1' among first digit
+              data_char$bl1_meanA <- mean(extract_digit(data$votes_a, 1)) # party A, mean first digit
+              data_char$bl1_meanB <- mean(extract_digit(data$votes_b, 1)) # party B, mean first digit
+              data_char$bl1_chi2A <- benford_chi2(data$votes_a, 1) # party A, chi2 statistic between observed and expected shares in first digit 
+              data_char$bl1_chi2B <- benford_chi2(data$votes_b, 1) # party B, chi2 statistic between observed and expected shares in first digit 
+              
+              # 2BL
+              data_char$bl2_frac1A <- length(which(extract_digit(data$votes_a, 2) == 1)) / length(data$votes_a) # partyA, fraction of '1' among second digit
+              data_char$bl2_frac1B <- length(which(extract_digit(data$votes_b, 2) == 1)) / length(data$votes_b) # partyB, fraction of '1' among second digit
+              data_char$bl2_meanA <- mean(extract_digit(data$votes_a, 2)) # party A, mean second digit
+              data_char$bl2_meanB <- mean(extract_digit(data$votes_b, 2)) # party B, mean second digit
+              data_char$bl2_chi2A <- benford_chi2(data$votes_a, 2) # party A, chi2 statistic between observed and expected shares in second digit
+              data_char$bl2_chi2B <- benford_chi2(data$votes_b, 2) # party B, chi2 statistic between observed and expected shares in second digit 
+              
+              # last digit
+              data_char$bllast_frac1A <- length(which(extract_digit(data$votes_a, "last") == 1)) / length(data$votes_a) # partyA, fraction of '1' among last digit
+              data_char$bllast_frac1B <- length(which(extract_digit(data$votes_b, "last") == 1)) / length(data$votes_b) # partyB, fraction of '1' among last digit
+              data_char$bllast_meanA <- mean(extract_digit(data$votes_a, "last")) # party A, mean last digit
+              data_char$bllast_meanB <- mean(extract_digit(data$votes_b, "last")) # party B, mean last digit
+              data_char$bllast_chi2A <- benford_chi2(data$votes_a, "last") # party A, chi2 statistic between observed and expected shares in last digit 
+              data_char$bllast_chi2B <- benford_chi2(data$votes_b, "last") # party B, chi2 statistic between observed and expected shares in last digit 
+              
+              # logarithmic turnout rate
+              log_turnout_rate <- log(data$turnout / (data$eligible - data$turnout))
+              data_char$logturnout_skew <- skewness(log_turnout_rate)
+              data_char$logturnout_kurt <- kurtosis(log_turnout_rate)
+              data_char$logturnout_sd <- sd(log_turnout_rate)
+              
+              # logarithmic vote share rates
+              log_shareA_rate <- log(data$share_A / (data$eligible - data$share_A))
+              data_char$logshareA_skew <- skewness(log_shareA_rate)
+              data_char$logshareA_kurt <- kurtosis(log_shareA_rate)
+              data_char$logshareA_sd <- sd(log_shareA_rate)
+              
+              log_shareB_rate <- log(data$share_B / (data$eligible - data$share_B))
+              data_char$logshareB_skew <- skewness(log_shareB_rate)
+              data_char$logshareB_kurt <- kurtosis(log_shareB_rate)
+              data_char$logshareB_sd <- sd(log_shareB_rate)
+              
+            ifelse(election == 1,
+                   data_list <- data_char, 
+                   data_list <- rbind(data_list, data_char)
+            )
+            
+          } # end if (data_type == "num_char")
+          
        
     } # end for election in 1:n_elections
     
     # return list of generated elections      
     return(data_list)
+    
         
   } # end function gen_data
 
-  sim_elections <- gen_data(n_elections = 10, n_entities = 1000, fraud_type="clean", 
-                            agg_factor = 1, data_type="full")
+  sim_elections <- gen_data(n_elections = 10, n_entities = 100, fraud_type="clean", 
+                            agg_factor = 1, data_type="num_char")
 
   
         
 #' ------------------------------------------------------------------
 #  --- 2. comparison to theoretical/empirical characteristics -------
 #' ------------------------------------------------------------------ 
+  
+  
+  
     
+  ### maybe there is also place for some figures simply plotting data
+  ### with different fraud parameters like I did in the FLACSO presentation 
+  
+  ### would certainly be very helpful for me to get a feeling for how th e
+  ### frauded data looks like
+  
+  
+  
+  
   #' ------------------------
   # 2.1 empirical data ------
   #' ------------------------
@@ -629,10 +684,10 @@ source("_functions.R")
               )
               
               fraud_values[row, "euc_distV"] <- 
-                distance(sort(ven04$share_no), sort(ven04_syn[[1]]$share_A), method="euclidean")
+                distance(sort(ru12$share_putin), sort(ru12_syn[[1]]$share_A), method="euclidean")
               
               fraud_values[row, "euc_distT"] <- 
-                distance(sort(ven04$turnout), sort(ven04_syn[[1]]$turnout), method="euclidean")
+                distance(sort(ru12$turnout), sort(ru12_syn[[1]]$turnout), method="euclidean")
               
               if (row %% 1000 == 0)
                 print(str_c("iteration ", row, " out of ", nrow(fraud_values)))
@@ -657,8 +712,8 @@ source("_functions.R")
                                   partyB_mean = mean(ru12$share_zyuganov), 
                                   partyB_sd = sd(ru12$share_zyuganov),
                                   fraud_type = "bbs",
-                                  fraud_incA = 0.2,
-                                  fraud_extA = 0.0,
+                                  fraud_incA = 0,
+                                  fraud_extA = 0.04,
                                   n_elections = 10)
             
             
@@ -696,6 +751,7 @@ source("_functions.R")
           
           uga11$turnout <- uga11$votes_all / uga11$eligible
           uga11$share_museveni <- uga11$museveni / uga11$votes_all
+          uga11$share_besigye <- uga11$besigye / uga11$votes_all
           
           # exclude units with an electorate < 100
           uga11 <- uga11[-which(uga11$eligible < 100),]
@@ -708,6 +764,69 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
+          #' -------------------------------------------------------------------------
+          ### first: find fraud_incA and fraud_extA that resembles data most closely
+          #' -------------------------------------------------------------------------
+          
+            fraud_values <- seq(0, 1, 0.01)
+            fraud_values <- expand.grid(fraud_values, fraud_values)
+            colnames(fraud_values) <- c("fraud_incA", "fraud_extA")
+            fraud_values$euc_distV <- fraud_values$euc_distT <- NA
+            # baseline_A = ?
+            # baseline_B = ?
+            
+            for (row in 1:nrow(fraud_values)) {
+              
+              uga11_syn <- gen_data(n_entities = nrow(uga11),
+                                   eligible = uga11$eligible,
+                                   turnout_mean = mean(uga11$turnout), 
+                                   turnout_sd = sd(uga11$turnout), 
+                                   partyA_mean = mean(uga11$share_museveni, na.rm=T), 
+                                   partyA_sd = sd(uga11$share_museveni, na.rm=T), 
+                                   partyB_mean = mean(uga11$share_besigye, na.rm=T), 
+                                   partyB_sd = sd(uga11$share_besigye, na.rm=T),
+                                   fraud_type = "bbs",
+                                   fraud_incA = fraud_values[row, "fraud_incA"],
+                                   fraud_extA = fraud_values[row, "fraud_extA"],
+                                   n_elections = 1, 
+                                   baseline_A = X, # ? 
+                                   baseline_B = X  # ?
+                                   
+              )
+              
+              fraud_values[row, "euc_distV"] <- 
+                distance(sort(uga11$share_museveni), sort(uga11_syn[[1]]$share_A), method="euclidean")
+              
+              fraud_values[row, "euc_distT"] <- 
+                distance(sort(uga11$turnout), sort(uga11_syn[[1]]$turnout), method="euclidean")
+              
+              if (row %% 1000 == 0)
+                print(str_c("iteration ", row, " out of ", nrow(fraud_values)))
+              
+            }
+            
+            # which fraud values to use
+            uga11_valsV <- fraud_values[which(fraud_values$euc_distV == min(fraud_values$euc_distV)),]
+            uga11_valsT <- fraud_values[which(fraud_values$euc_distT == min(fraud_values$euc_distT)),]
+            
+            
+          #' -------------------------------------------------------------------------
+          ### second: generate synthetic data using these values
+          #' -------------------------------------------------------------------------
+          
+            uga11_syn <- gen_data(n_entities = nrow(uga11),
+                                 eligible = uga11$eligible,
+                                 turnout_mean = mean(uga11$turnout), 
+                                 turnout_sd = sd(uga11$turnout), 
+                                 partyA_mean = mean(uga11$share_museveni), 
+                                 partyA_sd = sd(uga11$share_museveni), 
+                                 partyB_mean = mean(uga11$share_besigye), 
+                                 partyB_sd = sd(uga11$share_besigye),
+                                 fraud_type = "bbs",
+                                 fraud_incA = X, # ?
+                                 fraud_extA = X, # ?
+                                 n_elections = 10)
+            
           
       
       #' ------------------------------------------------
@@ -848,9 +967,9 @@ source("_functions.R")
       
       
           
-    #' ----------------
-    # 2.1 digits ------
-    #' ----------------
+    #' ------------------
+    # 2.2.2 digits ------
+    #' ------------------
     
       plot_digits_all(aus08_syn[[1]]$votes_a, aus08_syn[[1]]$votes_b)
       plot_digits_1last(aus08$SPÖ, aus08_syn)
@@ -886,9 +1005,9 @@ source("_functions.R")
         plot_digits_1last(ven04$rrp_no, ven04_syn, title = "Venezuela 2004", ylab = "Relative Frequency", xlab = "Number",
                           y_axis = T, y_labels = T, x_axis = T, x_labels = T)
         
-        # Country 5
+        # Russia 2012
         par(mar = c(2, 1, 1, 0))
-        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+        plot_digits_1last(ru12$putin, ru12_syn, title = "Russia 2012", xlab = "Number",
                           y_axis = F, x_axis = T, x_labels = T)
         
         # Country 6
@@ -918,9 +1037,9 @@ source("_functions.R")
       system(paste(getOption('pdfviewer'),'digit_comparisons_legend.pdf'))
       
       
-    #' -------------------------------------------------------
-    # 2.2 bivariate turnout and vote share distribution ------
-    #' -------------------------------------------------------
+    #' ---------------------------------------------------------
+    # 2.2.3 bivariate turnout and vote share distribution ------
+    #' ---------------------------------------------------------
       
       tikz('scatter.tex', standAlone = T, width=7, height=7)
       
@@ -952,9 +1071,9 @@ source("_functions.R")
             # synthetic
             par(mar = c(2.8, 1.5, 2.8, 2.3))
             image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
-            k <- kde2d(ven04_syn[[1]]$turnout, ven04_syn[[1]]$share_A, n=50)
+            k <- kde2d(ru12_syn[[1]]$turnout, ru12_syn[[1]]$share_A, n=50)
             image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
-            text(0.23, 0.95, "Venezuela 2004, Synthetic", col="white")
+            text(0.23, 0.95, "Russia 2012, Synthetic", col="white")
         
             
           #' -----------------------
@@ -984,9 +1103,9 @@ source("_functions.R")
       
         
         
-    #' ----------------------------------
-    # 2.3 logarithmic turnout rate ------
-    #' ----------------------------------
+    #' ------------------------------------
+    # 2.2.4 logarithmic turnout rate ------
+    #' ------------------------------------
     
       par(mfrow=c(1,1))
       
@@ -1000,7 +1119,113 @@ source("_functions.R")
     
     
     
+      
+#' ---------------------------------------------------------------------
+#  --- 3. function to apply ML approach on single empirical case -------
+#' --------------------------------------------------------------------- 
+
+  ml_detection <- function(data = aus08, eligible = eligible, turnout = turnout, 
+                       partyA = share_spo, partyB = share_ovp,
+                       fraud_incA = seq(0.01, 0.4, 0.01), fraud_extA = seq(0.01, 0.1, 0.01),
+                       fraud_incB = seq(0.01, 0.4, 0.01), fraud_extB = seq(0.01, 0.1, 0.01),
+                       fraud_types = c("bbs", "stealing", "switching"),
+                       n_elections = 500, models = c("ridge", "lasso"), seed=12345) {
+    
+    # data = data of empirical case 
+    # eligible = vector of eligible voters across entities of empirical case
+    # turnout = variable measuring turnout
+    # partyA = variable measuring partyA_share
+    # partyB = variable measuring partyB_share
+    # fraud_incA/B = range of fraud_inc parameters to train on 
+    # fraud_extA/B = range of fraud_ext parameters to train on 
+    # fraud_types = fraud types to train on 
+    # n_elections = number of artifical elections to create for each individual scenario
+    # models = ML approaches to use for training
+    
+    
+    
+    ### so basically, I use the gen_data function here within this function 
+    ### the input is just a single empirical dataset, out of which I extract the relevant
+    ### parameters like turnout_mean, n_entities etc. 
+    
+    ### then behind the scenes, many artificial datasets are generated and frauded
+    ### and models are trained. 
+    ### output should summarize what was used for training and also the test errors
+    ### that were yielded in the lab
+    
+    ### then trained models are applied to empirical dataset
+    
+    ### output matrix should then give the predictions (binary, mechanism, degree)
+    ### for all used methods 
+    
+    set.seed(seed)
+    
+    if (class(data) != "data.frame") 
+      stop("provided dataset is not a data.frame object")
+    
+    #' ------------------------------------
+    #  (i) construct artifical data -------
+    #' ------------------------------------
+    
+      # define scenarios that models are trained on 
+      # set up in a way that 50% of scenarios are clean, rest is frauded to different degrees
+      fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, fraud_incB, fraud_extB, fraud_types))
+      clean_scenarios <- as.data.frame(matrix(0, nrow = nrow(fraud_scenarios), ncol = 5))
+      colnames(fraud_scenarios) <- colnames(clean_scenarios) <- 
+        c("fraud_incA", "fraud_extA", "fraud_incB", "fraud_extB", "type")
+      clean_scenarios$type <- "clean"
+      sim_scenarios <- rbind(fraud_scenarios, clean_scenarios)
+     
+      # generate n_elections artifical cases under each scenario in sim_scenarios
+      for (scenario in 1:nrow(sim_scenarios)) {
+      
+        #### first: run gen_data just to determine baseline_A and baseline_B
+        ## so I need to adjust the gen_data function such that I can use it only to 
+        ## generate values for baseline_A and baseline_B
+        
+        
+        
+        
+        #### second: create artifical data using these baselineA and baseline_B values  
+        output <- gen_data(n_entities = nrow(data), 
+                                  eligible = data[, deparse(substitute(eligible))],
+                                  turnout_mean = mean(data[, deparse(substitute(turnout))]), 
+                                  turnout_sd = sd(data[, deparse(substitute(turnout))]),
+                                  partyA_mean = mean(data[, deparse(substitute(partyA))]), 
+                                  partyA_mean = sd(data[, deparse(substitute(partyA))]), 
+                                  partyB_mean = mean(data[, deparse(substitute(partyB))]), 
+                                  partyB_mean = sd(data[, deparse(substitute(partyB))]), 
+                                  fraud_type = sim_scenarios[scenario, "type"],
+                                  fraud_incA = sim_scenarios[scenario, "fraud_incA"],
+                                  fraud_extA = sim_scenarios[scenario, "fraud_extA"],
+                                  fraud_incB = sim_scenarios[scenario, "fraud_incB"],
+                                  fraud_extB = sim_scenarios[scenario, "fraud_extB"],
+                                  n_elections = n_elections,
+                                  data_type = "num_char",
+                                  baseline_A = X, # ? 
+                                  baseline_B = X # ?
+                                  )
+     
+        ifelse(scenario == 1,
+               sim_elections <- output, 
+               sim_elections <- rbind(sim_elections, output)
+               )
+        
+        }
+      
+      
+    #' ----------------------------
+    #  (ii) train ML models -------
+    #' ----------------------------
+    
+      
+      
+    
+    
+  }
   
+      
+      
 
 
 ##### which models to use for machine learning? Models that can do classification and prediction
