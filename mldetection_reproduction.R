@@ -6,7 +6,7 @@
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
               "stringr", "dplyr", "readxl", "tikzDevice", "distantia", 
-              "glmnet")
+              "caret", "glmnet")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -434,6 +434,7 @@ source("_functions.R")
             # fraud variables (y) 
             data_char$fraud <- n_frauded
             data_char$fraud[data_char$fraud > 0] <- 1
+            data_char$fraud_type = fraud_type
             data_char$n_frauded <- n_frauded
             data_char$perc_frauded <- n_frauded / sum(votes_all)
             data_char$fraud_incA <- fraud_incA
@@ -1245,30 +1246,94 @@ source("_functions.R")
         # construct empty objects to store results
         test_errors <- as.data.frame(matrix(NA, nrow = 5, ncol = 3))
         rownames(test_errors) <- c("kNN", "ridge", "lasso", "randomForest", "BART")
-        colnames(test_errors) <- c("binary", "categorical", "continuous")
-      
-        #' ------------------------
-        # ridge regression 
-        #' ------------------------
-          
-          #' ----------
-          # binary
-          #' ----------
+        colnames(test_errors) <- c("binary", "categorical", "RMSE")
         
-            # find optimal lambda using k-fold CV 
-            X_train <- model.matrix(fraud ~., train[,-c(2:7)])[,-1]
-            y_train <- train$fraud
-            best_lambda <- cv.glmnet(X_train, y_train, n_folds = 10, alpha = 0, family="binomial")$lambda.min
-            model_train <- glmnet(X_train, y_train, alpha=0, family="binomial", lambda=best_lambda)
+        # construct blueprint confusion matrices
+        confusion_binary <- list()
+        confusion_cat <- list()
+        
+        # train models and fill up empty matrices and lists
+        X_train <- model.matrix(fraud ~., train[,-c(2:7)])[,-1]
+        X_test <- model.matrix(fraud ~., test[,-c(2:7)])[,-1]
+        
+        y_train_binary <- as.factor(train$fraud)
+        y_test_binary <- as.factor(test$fraud)
+        y_train_cat <- as.factor(train$fraud_type)
+        y_test_cat <- as.factor(test$fraud_type)
+        y_train_cont <- train$perc_frauded
+        y_test_cont <- test$perc_frauded
+        
+        
+          #' ------------------------
+          # kNN
+          #' ------------------------
+        
+        
+        
+        
+        
+        
+          #' ------------------------
+          # ridge/lasso regression 
+          #' ------------------------
+          
+            # binary
+            binary_regul <- train(
+              x=X_train, y=y_train_binary, method="glmnet", metric="Accuracy",
+              trControl = trainControl("cv", number = 10), 
+              tuneGrid=expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
+            )
+            binary_ridge <- update(binary_regul, 
+                                   param=list(alpha=0, lambda=binary_regul$results$lambda[which(binary_regul$results$Accuracy[binary_regul$results$alpha==0] == max(binary_regul$results$Accuracy[binary_regul$results$alpha==0]))[1]]))
+            binary_lasso <- update(binary_regul, 
+                                   param=list(alpha=1, lambda=binary_regul$results$lambda[which(binary_regul$results$Accuracy[binary_regul$results$alpha==1] == max(binary_regul$results$Accuracy[binary_regul$results$alpha==1]))[1]]))
             
-            # predict y in test set
-            X_test <- model.matrix(fraud ~., test[,-c(2:7)])[,-1]
-            y_test <- test$fraud
-            logit_predictions <- predict(model_train, newx = X_test)
-            y_predictions <- rep(0, length(logit_predictions))
-            y_predictions[logit_predictions > 0] <- 1
-            test_errors["ridge", "binary"] <- length(which(y_test != y_predictions)) / length(y_test)
-    
+            preds_ridge <- binary_ridge %>% predict(X_test)
+            preds_lasso <- binary_lasso %>% predict(X_test)
+            
+            test_errors["ridge", "binary"] <- length(which(y_test_binary != preds_ridge)) / length(y_test_binary)
+            test_errors["lasso", "binary"] <- length(which(y_test_binary != preds_lasso)) / length(y_test_binary)
+            
+            confusion_binary[["ridge"]] <- confusionMatrix(data = preds_ridge, reference = y_test_binary)
+            confusion_binary[["lasso"]] <- confusionMatrix(data = preds_lasso, reference = y_test_binary)
+        
+            # categorical
+            cat_regul <- train(
+              x=X_train, y=y_train_cat, method="glmnet", metric="Accuracy",
+              trControl = trainControl("cv", number = 10), 
+              tuneGrid=expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
+            )
+            cat_ridge <- update(cat_regul, 
+                                   param=list(alpha=0, lambda=cat_regul$results$lambda[which(cat_regul$results$Accuracy[cat_regul$results$alpha==0] == max(cat_regul$results$Accuracy[cat_regul$results$alpha==0]))[1]]))
+            cat_lasso <- update(cat_regul, 
+                                   param=list(alpha=1, lambda=cat_regul$results$lambda[which(cat_regul$results$Accuracy[cat_regul$results$alpha==1] == max(cat_regul$results$Accuracy[cat_regul$results$alpha==1]))[1]]))
+            
+            
+            preds_ridge <- cat_ridge %>% predict(X_test)
+            preds_lasso <- cat_lasso %>% predict(X_test)
+            
+            test_errors["ridge", "categorical"] <- length(which(y_test_cat != preds_ridge)) / length(y_test_cat)
+            test_errors["lasso", "categorical"] <- length(which(y_test_cat != preds_lasso)) / length(y_test_cat)
+            
+            confusion_cat[["ridge"]] <- confusionMatrix(data = preds_ridge, reference = y_test_cat)
+            confusion_cat[["lasso"]] <- confusionMatrix(data = preds_lasso, reference = y_test_cat)
+            
+            # continuous
+            cont_regul <- train(
+              x=X_train, y=y_train_cont, method="glmnet", metric="RMSE",
+              trControl = trainControl("cv", number = 10), 
+              tuneGrid=expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
+            )
+            cont_ridge <- update(cont_regul, 
+                                param=list(alpha=0, lambda=cont_regul$results$lambda[which(cont_regul$results$RMSE[cont_regul$results$alpha==0] == min(cont_regul$results$RMSE[cont_regul$results$alpha==0]))[1]]))
+            cont_lasso <- update(cont_regul, 
+                                param=list(alpha=1, lambda=cont_regul$results$lambda[which(cont_regul$results$RMSE[cont_regul$results$alpha==1] == min(cont_regul$results$RMSE[cont_regul$results$alpha==1]))[1]]))
+
+            preds_ridge <- cont_ridge %>% predict(X_test)
+            preds_lasso <- cont_lasso %>% predict(X_test)
+            
+            test_errors["ridge", "RMSE"] <- RMSE(preds_ridge, y_test_cont)
+            test_errors["lasso", "RMSE"] <- RMSE(preds_lasso, y_test_cont)
     
   }
   
