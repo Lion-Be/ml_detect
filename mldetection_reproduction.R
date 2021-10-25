@@ -5,7 +5,8 @@
 
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
-              "stringr", "dplyr", "readxl", "tikzDevice", "distantia")
+              "stringr", "dplyr", "readxl", "tikzDevice", "distantia", 
+              "glmnet")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -29,7 +30,7 @@ source("_functions.R")
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
                        agg_factor = 1, n_elections = 1000, data_type = "full",
-                       baseline_A = NA, baseline_B = NA) {  
+                       baseline_A = NA, baseline_B = NA, baseline_gen = F) {  
     
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
@@ -50,7 +51,7 @@ source("_functions.R")
     # n_elections = number of elections to generate 
     # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
     # baseline_A/B = baseline values to scale BF distribution. If not specified, function optimizes for these
-  
+    # baseline_gen = should function only be run in order to generate baseline_A/B values, without artificial data generation?
    
     #' ----------------------------------------
     #  (i) optimize for baseline values -------
@@ -161,8 +162,12 @@ source("_functions.R")
            )  
     
       # val_optED <- val_combs[which(ED_vec == ED_vec[order(ED_vec)][1]),]
+    if (baseline_gen) {
+      return(val_opt)
+      break
+    }
       
-   
+    
     #' ----------------------------------------------
     # (ii) generate n=n_elections datasets ----------
     #' ----------------------------------------------
@@ -183,8 +188,8 @@ source("_functions.R")
         baseline_b <- val_opt[1, "baseline_b"]
         
         # latent support rates
-        l_support_a <- round(baseline_a * X_a, digits = 0) 
-        l_support_b <- round(baseline_b * X_b, digits = 0)
+        l_support_a <- as.integer(baseline_a * X_a) 
+        l_support_b <- as.integer(baseline_b * X_b)
         
         # construct vote totals from turnout distribution 
         turnout <- rtruncnorm(n_entities, 0, 1, turnout_mean, turnout_sd)
@@ -193,8 +198,8 @@ source("_functions.R")
         l_share_a <- l_support_a/(l_support_a+l_support_b)
         l_share_b <- 1-l_share_a
         
-        votes_all <- round(l_total * turnout, digits = 0)
-        votes_a <- round(votes_all * l_share_a, digits = 0)
+        votes_all <- as.integer(l_total * turnout)
+        votes_a <- as.integer(votes_all * l_share_a)
         votes_b <- votes_all - votes_a
         non_voters <- l_total - votes_a - votes_b
     
@@ -219,7 +224,7 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd((non_voters/l_total))))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                 non_voters <- l_total - votes_a - votes_b
@@ -228,14 +233,14 @@ source("_functions.R")
                   
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes 
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -254,7 +259,7 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/l_total)))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
                 non_voters <- l_total - votes_a - votes_b
@@ -263,14 +268,14 @@ source("_functions.R")
               
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes 
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
@@ -296,7 +301,7 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/l_total)))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                 non_voters <- l_total - votes_a - votes_b
@@ -305,14 +310,14 @@ source("_functions.R")
               
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes  
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/votes_all)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -331,7 +336,7 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/votes_all)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/l_total)))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
                 non_voters <- l_total - votes_a - votes_b
@@ -340,14 +345,14 @@ source("_functions.R")
               
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes  
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/votes_all)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
@@ -427,6 +432,8 @@ source("_functions.R")
             data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
             
             # fraud variables (y) 
+            data_char$fraud <- n_frauded
+            data_char$fraud[data_char$fraud > 0] <- 1
             data_char$n_frauded <- n_frauded
             data_char$perc_frauded <- n_frauded / sum(votes_all)
             data_char$fraud_incA <- fraud_incA
@@ -447,8 +454,8 @@ source("_functions.R")
               # 2BL
               data_char$bl2_frac1A <- length(which(extract_digit(data$votes_a, 2) == 1)) / length(data$votes_a) # partyA, fraction of '1' among second digit
               data_char$bl2_frac1B <- length(which(extract_digit(data$votes_b, 2) == 1)) / length(data$votes_b) # partyB, fraction of '1' among second digit
-              data_char$bl2_meanA <- mean(extract_digit(data$votes_a, 2)) # party A, mean second digit
-              data_char$bl2_meanB <- mean(extract_digit(data$votes_b, 2)) # party B, mean second digit
+              data_char$bl2_meanA <- mean(extract_digit(data$votes_a, 2), na.rm=T) # party A, mean second digit
+              data_char$bl2_meanB <- mean(extract_digit(data$votes_b, 2), na.rm=T) # party B, mean second digit
               data_char$bl2_chi2A <- benford_chi2(data$votes_a, 2) # party A, chi2 statistic between observed and expected shares in second digit
               data_char$bl2_chi2B <- benford_chi2(data$votes_b, 2) # party B, chi2 statistic between observed and expected shares in second digit 
               
@@ -484,7 +491,7 @@ source("_functions.R")
             
           } # end if (data_type == "num_char")
           
-       
+          
     } # end for election in 1:n_elections
     
     # return list of generated elections      
@@ -493,10 +500,12 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections <- gen_data(n_elections = 10, n_entities = 100, fraud_type="clean", 
+  sim_elections4 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="switching", 
+                             fraud_incA = 0.2, fraud_extA = 0.08, fraud_incB = 0.1, fraud_extB = 0.08, 
                             agg_factor = 1, data_type="num_char")
-
+  sim_elections <- rbind(sim_elections1, sim_elections2, sim_elections3, sim_elections4)
   
+    
         
 #' ------------------------------------------------------------------
 #  --- 2. comparison to theoretical/empirical characteristics -------
@@ -1124,7 +1133,7 @@ source("_functions.R")
 #  --- 3. function to apply ML approach on single empirical case -------
 #' --------------------------------------------------------------------- 
 
-  ml_detection <- function(data = aus08, eligible = eligible, turnout = turnout, 
+  ml_detect <- function(data = aus08, eligible = eligible, turnout = turnout, 
                        partyA = share_spo, partyB = share_ovp,
                        fraud_incA = seq(0.01, 0.4, 0.01), fraud_extA = seq(0.01, 0.1, 0.01),
                        fraud_incB = seq(0.01, 0.4, 0.01), fraud_extB = seq(0.01, 0.1, 0.01),
@@ -1176,56 +1185,95 @@ source("_functions.R")
       clean_scenarios$type <- "clean"
       sim_scenarios <- rbind(fraud_scenarios, clean_scenarios)
      
-      # generate n_elections artifical cases under each scenario in sim_scenarios
+      # run gen_data just to determine baseline_A and baseline_B for artificial data creation
+      val_opt <- gen_data(n_entities = nrow(data), 
+                          eligible = data[, deparse(substitute(eligible))],
+                          turnout_mean = mean(data[, deparse(substitute(turnout))]), 
+                          turnout_sd = sd(data[, deparse(substitute(turnout))]),
+                          partyA_mean = mean(data[, deparse(substitute(partyA))]), 
+                          partyA_sd = sd(data[, deparse(substitute(partyA))]), 
+                          partyB_mean = mean(data[, deparse(substitute(partyB))]), 
+                          partyB_sd = sd(data[, deparse(substitute(partyB))]), 
+                          baseline_gen = T
+      )
+      
+      # generate n_elections artificial cases under each scenario in sim_scenarios
       for (scenario in 1:nrow(sim_scenarios)) {
       
-        #### first: run gen_data just to determine baseline_A and baseline_B
-        ## so I need to adjust the gen_data function such that I can use it only to 
-        ## generate values for baseline_A and baseline_B
-        
-        
-        
-        
-        #### second: create artifical data using these baselineA and baseline_B values  
+        ##### dauern die deparse(substitute()) commands länger?
         output <- gen_data(n_entities = nrow(data), 
                                   eligible = data[, deparse(substitute(eligible))],
                                   turnout_mean = mean(data[, deparse(substitute(turnout))]), 
                                   turnout_sd = sd(data[, deparse(substitute(turnout))]),
                                   partyA_mean = mean(data[, deparse(substitute(partyA))]), 
-                                  partyA_mean = sd(data[, deparse(substitute(partyA))]), 
+                                  partyA_sd = sd(data[, deparse(substitute(partyA))]), 
                                   partyB_mean = mean(data[, deparse(substitute(partyB))]), 
-                                  partyB_mean = sd(data[, deparse(substitute(partyB))]), 
+                                  partyB_sd = sd(data[, deparse(substitute(partyB))]), 
                                   fraud_type = sim_scenarios[scenario, "type"],
                                   fraud_incA = sim_scenarios[scenario, "fraud_incA"],
                                   fraud_extA = sim_scenarios[scenario, "fraud_extA"],
                                   fraud_incB = sim_scenarios[scenario, "fraud_incB"],
                                   fraud_extB = sim_scenarios[scenario, "fraud_extB"],
+                                  agg_factor = 1, 
                                   n_elections = n_elections,
                                   data_type = "num_char",
-                                  baseline_A = X, # ? 
-                                  baseline_B = X # ?
+                                  baseline_A = val_opt[1,"baseline_a"],  
+                                  baseline_B = val_opt[1,"baseline_b"] 
                                   )
-     
+        
+        ##### dauert das rbind länger???
         ifelse(scenario == 1,
                sim_elections <- output, 
                sim_elections <- rbind(sim_elections, output)
                )
         
-        }
-      
+        #if (scenario %% 1000 == 0)
+          print(str_c("scenario: ", scenario, " out of ", nrow(sim_scenarios)))
+        
+        } # end for scenario in 1:nrow(scenarios)
+    
       
     #' ----------------------------
     #  (ii) train ML models -------
     #' ----------------------------
-    
       
+        # split data into training set (used for cross-validation) and final test set (untouched)
+        train_id <- sample(1:nrow(sim_elections), 0.8*nrow(sim_elections))
+        train <- sim_elections[train_id,]
+        test <- sim_elections[-train_id,]
+        
+        # construct empty objects to store results
+        test_errors <- as.data.frame(matrix(NA, nrow = 5, ncol = 3))
+        rownames(test_errors) <- c("kNN", "ridge", "lasso", "randomForest", "BART")
+        colnames(test_errors) <- c("binary", "categorical", "continuous")
       
+        #' ------------------------
+        # ridge regression 
+        #' ------------------------
+          
+          #' ----------
+          # binary
+          #' ----------
+        
+            # find optimal lambda using k-fold CV 
+            X_train <- model.matrix(fraud ~., train[,-c(2:7)])[,-1]
+            y_train <- train$fraud
+            best_lambda <- cv.glmnet(X_train, y_train, n_folds = 10, alpha = 0, family="binomial")$lambda.min
+            model_train <- glmnet(X_train, y_train, alpha=0, family="binomial", lambda=best_lambda)
+            
+            # predict y in test set
+            X_test <- model.matrix(fraud ~., test[,-c(2:7)])[,-1]
+            y_test <- test$fraud
+            logit_predictions <- predict(model_train, newx = X_test)
+            y_predictions <- rep(0, length(logit_predictions))
+            y_predictions[logit_predictions > 0] <- 1
+            test_errors["ridge", "binary"] <- length(which(y_test != y_predictions)) / length(y_test)
     
     
   }
   
       
-      
+  sim_elections <- ml_detect(data=as.data.frame(aus08), n_elections = 100) 
 
 
 ##### which models to use for machine learning? Models that can do classification and prediction
@@ -1235,6 +1283,29 @@ source("_functions.R")
 # neural network
  
 
+  aus08 <- as.data.frame(aus08)
+  
+  output <- gen_data(n_entities = nrow(aus08), 
+                     eligible = aus08[,"eligible"],
+                     turnout_mean = aus08[,"turnout"], 
+                     turnout_sd = aus08[,"turnout"],
+                     partyA_mean = aus08[,"share_spo"], 
+                     partyA_sd = aus08[,"share_spo"], 
+                     partyB_mean = aus08[,"share_ovp"], 
+                     partyB_sd = aus08[,"share_ovp"], 
+                     fraud_type = sim_scenarios[scenario, "type"],
+                     fraud_incA = sim_scenarios[scenario, "fraud_incA"],
+                     fraud_extA = sim_scenarios[scenario, "fraud_extA"],
+                     fraud_incB = sim_scenarios[scenario, "fraud_incB"],
+                     fraud_extB = sim_scenarios[scenario, "fraud_extB"],
+                     agg_factor = 1, 
+                     n_elections = n_elections,
+                     data_type = "num_char",
+                     baseline_A = 530,  
+                     baseline_B = 400 
+  )
+  
+  
     
 
 
