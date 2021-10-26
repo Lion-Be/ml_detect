@@ -6,7 +6,7 @@
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
               "stringr", "dplyr", "readxl", "tikzDevice", "distantia", 
-              "caret", "glmnet")
+              "caret", "glmnet", "class", "randomForest", "xgboost")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -423,12 +423,6 @@ source("_functions.R")
           
           if (data_type == "num_char") {
           
-            #### MISSING 
-            # things like chi2 statistic of BL test
-            # fraction of 1 among first digit
-            # skewness/kurtosis of turnout distribution
-            # Wichtig: hier muss ich am Ende von gen_data() die outcome-Variable konstruieren, also n_tainted_votes
-          
             data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
             
             # fraud variables (y) 
@@ -501,9 +495,18 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections4 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="switching", 
-                             fraud_incA = 0.2, fraud_extA = 0.08, fraud_incB = 0.1, fraud_extB = 0.08, 
+  sim_elections1 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="clean", 
+                             fraud_incA = 0, fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
                             agg_factor = 1, data_type="num_char")
+  sim_elections2 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="bbs", 
+                             fraud_incA = 0.2, fraud_extA = 0.04, fraud_incB = 0, fraud_extB = 0, 
+                             agg_factor = 1, data_type="num_char")
+  sim_elections3 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="stealing", 
+                             fraud_incA = 0.1, fraud_extA = 0.04, fraud_incB = 0.08, fraud_extB = 0.05, 
+                             agg_factor = 1, data_type="num_char")
+  sim_elections4 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="switching", 
+                             fraud_incA = 0, fraud_extA = 0, fraud_incB = 0.12, fraud_extB = 0.03, 
+                             agg_factor = 1, data_type="num_char")
   sim_elections <- rbind(sim_elections1, sim_elections2, sim_elections3, sim_elections4)
   
     
@@ -1239,22 +1242,33 @@ source("_functions.R")
     #' ----------------------------
       
         # split data into training set (used for cross-validation) and final test set (untouched)
-        train_id <- sample(1:nrow(sim_elections), 0.8*nrow(sim_elections))
+        # stratify over y-proportions (mechanisms), 80/20 split
+        set.seed(54321)
+        train_id <- createDataPartition(sim_elections$fraud_type,
+                                        times = 1,
+                                        p = 0.8,
+                                        list = FALSE)
         train <- sim_elections[train_id,]
         test <- sim_elections[-train_id,]
         
         # construct empty objects to store results
         test_errors <- as.data.frame(matrix(NA, nrow = 5, ncol = 3))
-        rownames(test_errors) <- c("kNN", "ridge", "lasso", "randomForest", "BART")
+        rownames(test_errors) <- c("kNN", "ridge", "lasso", "randomForest", "gradBoost")
         colnames(test_errors) <- c("binary", "categorical", "RMSE")
         
         # construct blueprint confusion matrices
         confusion_binary <- list()
         confusion_cat <- list()
         
-        # train models and fill up empty matrices and lists
-        X_train <- model.matrix(fraud ~., train[,-c(2:7)])[,-1]
-        X_test <- model.matrix(fraud ~., test[,-c(2:7)])[,-1]
+        # predictions on empirical case from trained models
+        predictions <- as.data.frame(matrix(NA, nrow=5, ncol=9))
+        rownames(predictions) <- c("kNN", "ridge", "lasso", "randomForest", "gradBoost")
+        colnames(predictions) <- c("binary", "p(fraud|X)", "categorical", "p(clean|X)", "p(bbs|X)", 
+                                   "p(stealing|X)", "p(switching|X)", "n_frauded", "sd")
+        
+        # define variables
+        X_train <- model.matrix(fraud ~., train[,-c(2:8)])[,-1]
+        X_test <- model.matrix(fraud ~., test[,-c(2:8)])[,-1]
         
         y_train_binary <- as.factor(train$fraud)
         y_test_binary <- as.factor(test$fraud)
@@ -1263,15 +1277,47 @@ source("_functions.R")
         y_train_cont <- train$perc_frauded
         y_test_cont <- test$perc_frauded
         
+        # define trControl settings that are agnostic to the specific method
+        tr_settings <- trainControl(method = "cv", 
+                                    number = 10, 
+                                    repeats=NA, 
+                                    search="grid")
+        
         
           #' ------------------------
           # kNN
           #' ------------------------
         
-        
-        
-        
-        
+            # binary 
+            binary_knn <- train(
+              x=X_train, y=y_train_binary, method="knn", metric="Accuracy", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(k=1:20)
+            )
+            
+            preds_knn <- binary_knn %>% predict(X_test)
+            test_errors["kNN", "binary"] <- length(which(y_test_binary != preds_knn)) / length(y_test_binary)
+            confusion_binary[["knn"]] <- confusionMatrix(data = preds_knn, reference = y_test_binary)
+            
+            # categorical 
+            cat_knn <- train(
+              x=X_train, y=y_train_cat, method="knn", metric="Accuracy", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(k=1:20)
+            )
+            preds_knn <- cat_knn %>% predict(X_test)
+            test_errors["kNN", "categorical"] <- length(which(y_test_cat != preds_knn)) / length(y_test_cat)
+            confusion_cat[["knn"]] <- confusionMatrix(data = preds_knn, reference = y_test_cat)
+            
+            # continuous 
+            cont_knn <- train(
+              x=X_train, y=y_train_cont, method="knn", metric="RMSE", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(k=1:20)
+            )
+            preds_knn <- cont_knn %>% predict(X_test)
+            test_errors["kNN", "RMSE"] <-  RMSE(preds_knn, y_test_cont)
+            
         
           #' ------------------------
           # ridge/lasso regression 
@@ -1280,8 +1326,8 @@ source("_functions.R")
             # binary
             binary_regul <- train(
               x=X_train, y=y_train_binary, method="glmnet", metric="Accuracy",
-              trControl = trainControl("cv", number = 10), 
-              tuneGrid=expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
             )
             binary_ridge <- update(binary_regul, 
                                    param=list(alpha=0, lambda=binary_regul$results$lambda[which(binary_regul$results$Accuracy[binary_regul$results$alpha==0] == max(binary_regul$results$Accuracy[binary_regul$results$alpha==0]))[1]]))
@@ -1300,7 +1346,7 @@ source("_functions.R")
             # categorical
             cat_regul <- train(
               x=X_train, y=y_train_cat, method="glmnet", metric="Accuracy",
-              trControl = trainControl("cv", number = 10), 
+              trControl = tr_settings, 
               tuneGrid=expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
             )
             cat_ridge <- update(cat_regul, 
@@ -1321,7 +1367,7 @@ source("_functions.R")
             # continuous
             cont_regul <- train(
               x=X_train, y=y_train_cont, method="glmnet", metric="RMSE",
-              trControl = trainControl("cv", number = 10), 
+              trControl = tr_settings, 
               tuneGrid=expand.grid(alpha=c(0,1), lambda=10^seq(3, -3, length=100)) 
             )
             cont_ridge <- update(cont_regul, 
@@ -1335,6 +1381,114 @@ source("_functions.R")
             test_errors["ridge", "RMSE"] <- RMSE(preds_ridge, y_test_cont)
             test_errors["lasso", "RMSE"] <- RMSE(preds_lasso, y_test_cont)
     
+            
+          #' ------------------------
+          # random Forest
+          #' ------------------------
+          
+            # binary 
+            binary_rf <- train(
+              x=X_train, y=y_train_binary, method="rf", metric="Accuracy", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(mtry=c(3:20))
+            )
+            
+            preds_rf <- binary_rf %>% predict(X_test)
+            test_errors["randomForest", "binary"] <- length(which(y_test_binary != preds_rf)) / length(y_test_binary)
+            confusion_binary[["randomForest"]] <- confusionMatrix(data = preds_rf, reference = y_test_binary)
+            
+            # categorical 
+            cat_rf <- train(
+              x=X_train, y=y_train_cat, method="rf", metric="Accuracy", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(mtry=c(3:20))
+            )
+            preds_rf <- cat_rf %>% predict(X_test)
+            test_errors["randomForest", "categorical"] <- length(which(y_test_cat != preds_rf)) / length(y_test_cat)
+            confusion_cat[["randomForest"]] <- confusionMatrix(data = preds_rf, reference = y_test_cat)
+            
+            # continuous 
+            cont_rf <- train(
+              x=X_train, y=y_train_cont, method="rf", metric="RMSE", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(mtry=c(3:20))
+            )
+            preds_rf <- cont_rf %>% predict(X_test)
+            test_errors["randomForest", "RMSE"] <- RMSE(preds_rf, y_test_cont)
+           
+            
+          #' ------------------------------------
+          # gradient boosting
+          #' ------------------------------------
+          
+            # binary 
+            binary_boost <- train(
+              x=X_train, y=y_train_binary, method="xgbTree", metric="Accuracy", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(eta = c(0.05, 0.075, 0.1),
+                                     nrounds = c(50, 75, 100),
+                                     max_depth = 6:8,
+                                     min_child_weight = 2.2,
+                                     colsample_bytree = 0.4,
+                                     gamma = 0,
+                                     subsample = 1)
+            )
+            preds_boost <- binary_boost %>% predict(X_test)
+            test_errors["gradBoost", "binary"] <- length(which(y_test_binary != preds_boost)) / length(y_test_binary)
+            confusion_binary[["gradBoost"]] <- confusionMatrix(data = preds_boost, reference = y_test_binary)
+            
+            # categorical 
+            cat_boost <- train(
+              x=X_train, y=y_train_cat, method="xgbTree", metric="Accuracy", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(eta = c(0.05, 0.075, 0.1),
+                                     nrounds = c(50, 75, 100),
+                                     max_depth = 6:8,
+                                     min_child_weight = 2.2,
+                                     colsample_bytree = 0.4,
+                                     gamma = 0,
+                                     subsample = 1)
+            )
+            preds_boost <- cat_boost %>% predict(X_test)
+            test_errors["gradBoost", "categorical"] <- length(which(y_test_cat != preds_boost)) / length(y_test_cat)
+            confusion_cat[["gradBoost"]] <- confusionMatrix(data = preds_boost, reference = y_test_cat)
+            
+            # continuous 
+            cont_boost <- train(
+              x=X_train, y=y_train_cont, method="xgbTree", metric="RMSE", 
+              trControl = tr_settings, 
+              tuneGrid = expand.grid(eta = c(0.05, 0.075, 0.1),
+                                     nrounds = c(50, 75, 100),
+                                     max_depth = 6:8,
+                                     min_child_weight = 2.2,
+                                     colsample_bytree = 0.4,
+                                     gamma = 0,
+                                     subsample = 1)
+            )
+            preds_boost <- cont_boost %>% predict(X_test)
+            test_errors["gradBoost", "RMSE"] <- RMSE(preds_boost, y_test_cont)
+            
+            
+        #' --------------------------------------------------
+        #  (iii) create prediction for empirical case -------
+        #' --------------------------------------------------
+        
+          
+            # ich brauche eine Funktion gen_features()- die mir die ganzen features für X_train 
+            # generiert. Ich brauche das nämlich einmal innerhalb von gen_data() und einmal innerhalb von 
+            # ml_detect() für den empirischen case
+          
+            
+            
+            
+            ##### add parallelization with doSNOW
+            
+            #### add predictions (incl. probabilities) for empirical case
+            ##### default is using best method, but one can also specify method
+            
+            ##### add how to inspect feature importance
+            
+            
   }
   
       
