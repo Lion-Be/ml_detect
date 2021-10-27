@@ -5,7 +5,7 @@
 
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
-              "stringr", "dplyr", "readxl", "tikzDevice", "distantia", 
+              "stringr", "dplyr", "readxl", "tikzDevice", "distantia", "doSNOW", 
               "caret", "glmnet", "class", "randomForest", "xgboost")
 
 for (i in 1: length(packages)) {
@@ -437,55 +437,20 @@ source("_functions.R")
             data_char$fraud_extB <- fraud_extB
             
             # numerical characteristics (X)
+            data_charX <- gen_features(data$votes_a, data$votes_b, data$turnout, 
+                                       data$share_A, data$share_B)
             
-              # 1BL 
-              data_char$bl1_frac1A <- length(which(extract_digit(data$votes_a, 1) == 1)) / length(data$votes_a) # partyA, fraction of '1' among first digit
-              data_char$bl1_frac1B <- length(which(extract_digit(data$votes_b, 1) == 1)) / length(data$votes_b) # partyB, fraction of '1' among first digit
-              data_char$bl1_meanA <- mean(extract_digit(data$votes_a, 1)) # party A, mean first digit
-              data_char$bl1_meanB <- mean(extract_digit(data$votes_b, 1)) # party B, mean first digit
-              data_char$bl1_chi2A <- benford_chi2(data$votes_a, 1) # party A, chi2 statistic between observed and expected shares in first digit 
-              data_char$bl1_chi2B <- benford_chi2(data$votes_b, 1) # party B, chi2 statistic between observed and expected shares in first digit 
-              
-              # 2BL
-              data_char$bl2_frac1A <- length(which(extract_digit(data$votes_a, 2) == 1)) / length(data$votes_a) # partyA, fraction of '1' among second digit
-              data_char$bl2_frac1B <- length(which(extract_digit(data$votes_b, 2) == 1)) / length(data$votes_b) # partyB, fraction of '1' among second digit
-              data_char$bl2_meanA <- mean(extract_digit(data$votes_a, 2), na.rm=T) # party A, mean second digit
-              data_char$bl2_meanB <- mean(extract_digit(data$votes_b, 2), na.rm=T) # party B, mean second digit
-              data_char$bl2_chi2A <- benford_chi2(data$votes_a, 2) # party A, chi2 statistic between observed and expected shares in second digit
-              data_char$bl2_chi2B <- benford_chi2(data$votes_b, 2) # party B, chi2 statistic between observed and expected shares in second digit 
-              
-              # last digit
-              data_char$bllast_frac1A <- length(which(extract_digit(data$votes_a, "last") == 1)) / length(data$votes_a) # partyA, fraction of '1' among last digit
-              data_char$bllast_frac1B <- length(which(extract_digit(data$votes_b, "last") == 1)) / length(data$votes_b) # partyB, fraction of '1' among last digit
-              data_char$bllast_meanA <- mean(extract_digit(data$votes_a, "last")) # party A, mean last digit
-              data_char$bllast_meanB <- mean(extract_digit(data$votes_b, "last")) # party B, mean last digit
-              data_char$bllast_chi2A <- benford_chi2(data$votes_a, "last") # party A, chi2 statistic between observed and expected shares in last digit 
-              data_char$bllast_chi2B <- benford_chi2(data$votes_b, "last") # party B, chi2 statistic between observed and expected shares in last digit 
-              
-              # logarithmic turnout rate
-              log_turnout_rate <- log(data$turnout / (data$eligible - data$turnout))
-              data_char$logturnout_skew <- skewness(log_turnout_rate)
-              data_char$logturnout_kurt <- kurtosis(log_turnout_rate)
-              data_char$logturnout_sd <- sd(log_turnout_rate)
-              
-              # logarithmic vote share rates
-              log_shareA_rate <- log(data$share_A / (data$eligible - data$share_A))
-              data_char$logshareA_skew <- skewness(log_shareA_rate)
-              data_char$logshareA_kurt <- kurtosis(log_shareA_rate)
-              data_char$logshareA_sd <- sd(log_shareA_rate)
-              
-              log_shareB_rate <- log(data$share_B / (data$eligible - data$share_B))
-              data_char$logshareB_skew <- skewness(log_shareB_rate)
-              data_char$logshareB_kurt <- kurtosis(log_shareB_rate)
-              data_char$logshareB_sd <- sd(log_shareB_rate)
-              
+            data_char <- cbind(data_char, data_charX)
+            
             ifelse(election == 1,
                    data_list <- data_char, 
                    data_list <- rbind(data_list, data_char)
             )
-            
+           
           } # end if (data_type == "num_char")
           
+      # if (election %% 10 == 0)
+      #  print(str_c("election ", election, " out of ", n_elections, " simulated."))
           
     } # end for election in 1:n_elections
     
@@ -1137,12 +1102,14 @@ source("_functions.R")
 #  --- 3. function to apply ML approach on single empirical case -------
 #' --------------------------------------------------------------------- 
 
-  ml_detect <- function(data = aus08, eligible = eligible, turnout = turnout, 
-                       partyA = share_spo, partyB = share_ovp,
-                       fraud_incA = seq(0.01, 0.4, 0.01), fraud_extA = seq(0.01, 0.1, 0.01),
-                       fraud_incB = seq(0.01, 0.4, 0.01), fraud_extB = seq(0.01, 0.1, 0.01),
-                       fraud_types = c("bbs", "stealing", "switching"),
-                       n_elections = 500, models = c("ridge", "lasso"), seed=12345) {
+  ml_detect <- function(data = aus08, eligible = aus08$eligible, turnout = aus08$turnout, 
+                        votes_a = aus08$SPÖ, votes_b = aus08$ÖVP, share_A = aus08$share_spo, 
+                        share_B = aus08$share_ovp, 
+                        fraud_incA = seq(0.01, 0.3, 0.01), fraud_extA = seq(0.01, 0.05, 0.01),
+                        fraud_incB = seq(0.01, 0.3, 0.01), fraud_extB = seq(0.01, 0.05, 0.01),
+                        fraud_types = c("bbs", "stealing", "switching"),
+                        n_elections = 1, models = c("kNN", "regul_reg", "randomForest", "gradBoost"), 
+                        seed=12345, parallel = T) {
     
     # data = data of empirical case 
     # eligible = vector of eligible voters across entities of empirical case
@@ -1176,6 +1143,11 @@ source("_functions.R")
     if (class(data) != "data.frame") 
       stop("provided dataset is not a data.frame object")
     
+    if (parallel) {
+      cl <- makeCluster(parallel::detectCores(), type = "SOCK")
+      registerDoSNOW(cl)
+    }
+   
     #' ------------------------------------
     #  (i) construct artifical data -------
     #' ------------------------------------
@@ -1191,28 +1163,28 @@ source("_functions.R")
      
       # run gen_data just to determine baseline_A and baseline_B for artificial data creation
       val_opt <- gen_data(n_entities = nrow(data), 
-                          eligible = data[, deparse(substitute(eligible))],
-                          turnout_mean = mean(data[, deparse(substitute(turnout))]), 
-                          turnout_sd = sd(data[, deparse(substitute(turnout))]),
-                          partyA_mean = mean(data[, deparse(substitute(partyA))]), 
-                          partyA_sd = sd(data[, deparse(substitute(partyA))]), 
-                          partyB_mean = mean(data[, deparse(substitute(partyB))]), 
-                          partyB_sd = sd(data[, deparse(substitute(partyB))]), 
+                          eligible = eligible,
+                          turnout_mean = mean(turnout), 
+                          turnout_sd = sd(turnout),
+                          partyA_mean = mean(share_A),
+                          partyA_sd = sd(share_A), 
+                          partyB_mean = mean(share_B), 
+                          partyB_sd = sd(share_B), 
                           baseline_gen = T
       )
       
       # generate n_elections artificial cases under each scenario in sim_scenarios
+      Sys.time()
       for (scenario in 1:nrow(sim_scenarios)) {
       
-        ##### dauern die deparse(substitute()) commands länger?
         output <- gen_data(n_entities = nrow(data), 
-                                  eligible = data[, deparse(substitute(eligible))],
-                                  turnout_mean = mean(data[, deparse(substitute(turnout))]), 
-                                  turnout_sd = sd(data[, deparse(substitute(turnout))]),
-                                  partyA_mean = mean(data[, deparse(substitute(partyA))]), 
-                                  partyA_sd = sd(data[, deparse(substitute(partyA))]), 
-                                  partyB_mean = mean(data[, deparse(substitute(partyB))]), 
-                                  partyB_sd = sd(data[, deparse(substitute(partyB))]), 
+                                  eligible = eligible,
+                                  turnout_mean = mean(turnout), 
+                                  turnout_sd = sd(turnout),
+                                  partyA_mean = mean(share_A),
+                                  partyA_sd = sd(share_A), 
+                                  partyB_mean = mean(share_B), 
+                                  partyB_sd = sd(share_B), 
                                   fraud_type = sim_scenarios[scenario, "type"],
                                   fraud_incA = sim_scenarios[scenario, "fraud_incA"],
                                   fraud_extA = sim_scenarios[scenario, "fraud_extA"],
@@ -1220,19 +1192,20 @@ source("_functions.R")
                                   fraud_extB = sim_scenarios[scenario, "fraud_extB"],
                                   agg_factor = 1, 
                                   n_elections = n_elections,
-                                  data_type = "num_char",
+                                  data_type = "full",
                                   baseline_A = val_opt[1,"baseline_a"],  
                                   baseline_B = val_opt[1,"baseline_b"] 
                                   )
         
-        ##### dauert das rbind länger???
+        ##### dauert das rbind länger??? lieber in Liste speichern und 
+        ##### dann einmal unlisten. ist glaube ich weniger Rechenaufwand
         ifelse(scenario == 1,
                sim_elections <- output, 
                sim_elections <- rbind(sim_elections, output)
                )
         
-        #if (scenario %% 1000 == 0)
-          print(str_c("scenario: ", scenario, " out of ", nrow(sim_scenarios)))
+        if (scenario %% 1000 == 0) 
+          print(str_c("scenario: ", scenario, " out of ", nrow(sim_scenarios), ", ", Sys.time()))
         
         } # end for scenario in 1:nrow(scenarios)
     
@@ -1261,10 +1234,11 @@ source("_functions.R")
         confusion_cat <- list()
         
         # predictions on empirical case from trained models
-        predictions <- as.data.frame(matrix(NA, nrow=5, ncol=9))
+        predictions <- as.data.frame(matrix(NA, nrow=5, ncol=10))
         rownames(predictions) <- c("kNN", "ridge", "lasso", "randomForest", "gradBoost")
         colnames(predictions) <- c("binary", "p(fraud|X)", "categorical", "p(clean|X)", "p(bbs|X)", 
-                                   "p(stealing|X)", "p(switching|X)", "n_frauded", "sd")
+                                   "p(stealing|X)", "p(switching|X)", "perc_frauded", "sd(yhat-y)")
+        X_emp <- gen_features(votes_a, votes_b, turnout, share_A, share_B)
         
         # define variables
         X_train <- model.matrix(fraud ~., train[,-c(2:8)])[,-1]
@@ -1286,6 +1260,7 @@ source("_functions.R")
         
           #' ------------------------
           # kNN
+          if(is.element("kNN", models)) {
           #' ------------------------
         
             # binary 
@@ -1295,9 +1270,15 @@ source("_functions.R")
               tuneGrid = expand.grid(k=1:20)
             )
             
-            preds_knn <- binary_knn %>% predict(X_test)
+            preds_knnP <- binary_knn %>% predict(X_test, type="prob")
+            preds_knn <- apply(preds_knnP, 1, which.max)-1
+            
             test_errors["kNN", "binary"] <- length(which(y_test_binary != preds_knn)) / length(y_test_binary)
-            confusion_binary[["knn"]] <- confusionMatrix(data = preds_knn, reference = y_test_binary)
+            confusion_binary[["knn"]] <- confusionMatrix(data = as.factor(preds_knn), reference = y_test_binary)
+            
+            predictions["kNN", "p(fraud|X)"] <- (binary_knn %>% predict(X_emp, type="prob"))[,2]
+            predictions["kNN", "binary"] <- ifelse(predictions["kNN", "p(fraud|X)"] > 0.5, "fraud", "clean")
+            
             
             # categorical 
             cat_knn <- train(
@@ -1305,9 +1286,16 @@ source("_functions.R")
               trControl = tr_settings, 
               tuneGrid = expand.grid(k=1:20)
             )
-            preds_knn <- cat_knn %>% predict(X_test)
+            
+            preds_knnP <- cat_knn %>% predict(X_test, type="prob")
+            preds_knn <- colnames(preds_knnP)[apply(preds_knnP, 1, which.max)]
+            
             test_errors["kNN", "categorical"] <- length(which(y_test_cat != preds_knn)) / length(y_test_cat)
-            confusion_cat[["knn"]] <- confusionMatrix(data = preds_knn, reference = y_test_cat)
+            confusion_cat[["knn"]] <- confusionMatrix(data = as.factor(preds_knn), reference = y_test_cat)
+            
+            predictions["kNN", "categorical"] <- names(which.max((cat_knn %>% predict(X_emp, type="prob"))))
+            predictions["kNN", 4:7] <- cat_knn %>% predict(X_emp, type="prob")
+            
             
             # continuous 
             cont_knn <- train(
@@ -1315,12 +1303,19 @@ source("_functions.R")
               trControl = tr_settings, 
               tuneGrid = expand.grid(k=1:20)
             )
+            
             preds_knn <- cont_knn %>% predict(X_test)
             test_errors["kNN", "RMSE"] <-  RMSE(preds_knn, y_test_cont)
             
+            predictions["kNN", "perc_frauded"] <- cont_knn %>% predict(X_emp)
+            predictions["kNN", "sd(yhat-y)"] <- sd(preds_knn - y_test_cont)
+            
+          } # end kNN
+        
         
           #' ------------------------
           # ridge/lasso regression 
+          if(is.element("regul_reg", models)) {
           #' ------------------------
           
             # binary
@@ -1334,15 +1329,25 @@ source("_functions.R")
             binary_lasso <- update(binary_regul, 
                                    param=list(alpha=1, lambda=binary_regul$results$lambda[which(binary_regul$results$Accuracy[binary_regul$results$alpha==1] == max(binary_regul$results$Accuracy[binary_regul$results$alpha==1]))[1]]))
             
-            preds_ridge <- binary_ridge %>% predict(X_test)
-            preds_lasso <- binary_lasso %>% predict(X_test)
+            preds_ridgeP <- binary_ridge %>% predict(X_test, type="prob")
+            preds_ridge <- apply(preds_ridgeP, 1, which.max)-1
+            
+            preds_lassoP <- binary_lasso %>% predict(X_test, type="prob")
+            preds_lasso <- apply(preds_lassoP, 1, which.max)-1
             
             test_errors["ridge", "binary"] <- length(which(y_test_binary != preds_ridge)) / length(y_test_binary)
             test_errors["lasso", "binary"] <- length(which(y_test_binary != preds_lasso)) / length(y_test_binary)
             
-            confusion_binary[["ridge"]] <- confusionMatrix(data = preds_ridge, reference = y_test_binary)
-            confusion_binary[["lasso"]] <- confusionMatrix(data = preds_lasso, reference = y_test_binary)
+            confusion_binary[["ridge"]] <- confusionMatrix(data = as.factor(preds_ridge), reference = y_test_binary)
+            confusion_binary[["lasso"]] <- confusionMatrix(data = as.factor(preds_lasso), reference = y_test_binary)
         
+            predictions["ridge", "p(fraud|X)"] <- (binary_ridge %>% predict(X_emp, type="prob"))[,2]
+            predictions["ridge", "binary"] <- ifelse(predictions["ridge", "p(fraud|X)"] > 0.5, "fraud", "clean")
+            
+            predictions["lasso", "p(fraud|X)"] <- (binary_lasso %>% predict(X_emp, type="prob"))[,2]
+            predictions["lasso", "binary"] <- ifelse(predictions["lasso", "p(fraud|X)"] > 0.5, "fraud", "clean")
+            
+            
             # categorical
             cat_regul <- train(
               x=X_train, y=y_train_cat, method="glmnet", metric="Accuracy",
@@ -1354,15 +1359,24 @@ source("_functions.R")
             cat_lasso <- update(cat_regul, 
                                    param=list(alpha=1, lambda=cat_regul$results$lambda[which(cat_regul$results$Accuracy[cat_regul$results$alpha==1] == max(cat_regul$results$Accuracy[cat_regul$results$alpha==1]))[1]]))
             
+            preds_ridgeP <- cat_ridge %>% predict(X_test, type="prob")
+            preds_ridge <- colnames(preds_ridgeP)[apply(preds_ridgeP, 1, which.max)]
             
-            preds_ridge <- cat_ridge %>% predict(X_test)
-            preds_lasso <- cat_lasso %>% predict(X_test)
+            preds_lassoP <- cat_lasso %>% predict(X_test, type="prob")
+            preds_lasso <- colnames(preds_lassoP)[apply(preds_lassoP, 1, which.max)]
             
             test_errors["ridge", "categorical"] <- length(which(y_test_cat != preds_ridge)) / length(y_test_cat)
             test_errors["lasso", "categorical"] <- length(which(y_test_cat != preds_lasso)) / length(y_test_cat)
             
-            confusion_cat[["ridge"]] <- confusionMatrix(data = preds_ridge, reference = y_test_cat)
-            confusion_cat[["lasso"]] <- confusionMatrix(data = preds_lasso, reference = y_test_cat)
+            confusion_cat[["ridge"]] <- confusionMatrix(data = as.factor(preds_ridge), reference = y_test_cat)
+            confusion_cat[["lasso"]] <- confusionMatrix(data = as.factor(preds_lasso), reference = y_test_cat)
+            
+            predictions["ridge", "categorical"] <- names(which.max((cat_ridge %>% predict(X_emp, type="prob"))))
+            predictions["ridge", 4:7] <- cat_ridge %>% predict(X_emp, type="prob")
+            
+            predictions["lasso", "categorical"] <- names(which.max((cat_lasso %>% predict(X_emp, type="prob"))))
+            predictions["lasso", 4:7] <- cat_lasso %>% predict(X_emp, type="prob")
+            
             
             # continuous
             cont_regul <- train(
@@ -1380,10 +1394,19 @@ source("_functions.R")
             
             test_errors["ridge", "RMSE"] <- RMSE(preds_ridge, y_test_cont)
             test_errors["lasso", "RMSE"] <- RMSE(preds_lasso, y_test_cont)
-    
             
+            predictions["ridge", "perc_frauded"] <- cont_ridge %>% predict(X_emp)
+            predictions["ridge", "sd(yhat-y)"] <- sd(preds_ridge - y_test_cont)
+          
+            predictions["lasso", "perc_frauded"] <- cont_lasso %>% predict(X_emp)
+            predictions["lasso", "sd(yhat-y)"] <- sd(preds_lasso - y_test_cont)
+            
+          } # end regul_reg
+            
+        
           #' ------------------------
           # random Forest
+          if(is.element("randomForest", models)) {
           #' ------------------------
           
             # binary 
@@ -1393,9 +1416,15 @@ source("_functions.R")
               tuneGrid = expand.grid(mtry=c(3:20))
             )
             
-            preds_rf <- binary_rf %>% predict(X_test)
+            preds_rfP <- binary_rf %>% predict(X_test, type="prob")
+            preds_rf <- apply(preds_rfP, 1, which.max)-1
+            
             test_errors["randomForest", "binary"] <- length(which(y_test_binary != preds_rf)) / length(y_test_binary)
-            confusion_binary[["randomForest"]] <- confusionMatrix(data = preds_rf, reference = y_test_binary)
+            confusion_binary[["randomForest"]] <- confusionMatrix(data = as.factor(preds_rf), reference = y_test_binary)
+            
+            predictions["randomForest", "p(fraud|X)"] <- (binary_rf %>% predict(X_emp, type="prob"))[,2]
+            predictions["randomForest", "binary"] <- ifelse(predictions["randomForest", "p(fraud|X)"] > 0.5, "fraud", "clean")
+            
             
             # categorical 
             cat_rf <- train(
@@ -1403,9 +1432,16 @@ source("_functions.R")
               trControl = tr_settings, 
               tuneGrid = expand.grid(mtry=c(3:20))
             )
-            preds_rf <- cat_rf %>% predict(X_test)
+            
+            preds_rfP <- cat_rf %>% predict(X_test, type="prob")
+            preds_rf <- colnames(preds_rfP)[apply(preds_rfP, 1, which.max)]
+            
             test_errors["randomForest", "categorical"] <- length(which(y_test_cat != preds_rf)) / length(y_test_cat)
-            confusion_cat[["randomForest"]] <- confusionMatrix(data = preds_rf, reference = y_test_cat)
+            confusion_cat[["randomForest"]] <- confusionMatrix(data = as.factor(preds_rf), reference = y_test_cat)
+            
+            predictions["randomForest", "categorical"] <- names(which.max((cat_rf %>% predict(X_emp, type="prob"))))
+            predictions["randomForest", 4:7] <- cat_rf %>% predict(X_emp, type="prob")
+            
             
             # continuous 
             cont_rf <- train(
@@ -1413,12 +1449,19 @@ source("_functions.R")
               trControl = tr_settings, 
               tuneGrid = expand.grid(mtry=c(3:20))
             )
+            
             preds_rf <- cont_rf %>% predict(X_test)
             test_errors["randomForest", "RMSE"] <- RMSE(preds_rf, y_test_cont)
            
+            predictions["randomForest", "perc_frauded"] <- cont_rf %>% predict(X_emp)
+            predictions["randomForest", "sd(yhat-y)"] <- sd(preds_rf - y_test_cont)
             
+          } # end randomForest
+            
+        
           #' ------------------------------------
           # gradient boosting
+          if(is.element("gradBoost", models)) {
           #' ------------------------------------
           
             # binary 
@@ -1433,9 +1476,15 @@ source("_functions.R")
                                      gamma = 0,
                                      subsample = 1)
             )
-            preds_boost <- binary_boost %>% predict(X_test)
+            preds_boostP <- binary_boost %>% predict(X_test, type="prob")
+            preds_boost <-  apply(preds_boostP, 1, which.max)-1
+            
             test_errors["gradBoost", "binary"] <- length(which(y_test_binary != preds_boost)) / length(y_test_binary)
-            confusion_binary[["gradBoost"]] <- confusionMatrix(data = preds_boost, reference = y_test_binary)
+            confusion_binary[["gradBoost"]] <- confusionMatrix(data = as.factor(preds_boost), reference = y_test_binary)
+            
+            predictions["gradBoost", "p(fraud|X)"] <- (binary_boost %>% predict(X_emp, type="prob"))[,2]
+            predictions["gradBoost", "binary"] <- ifelse(predictions["gradBoost", "p(fraud|X)"] > 0.5, "fraud", "clean")
+            
             
             # categorical 
             cat_boost <- train(
@@ -1449,9 +1498,15 @@ source("_functions.R")
                                      gamma = 0,
                                      subsample = 1)
             )
-            preds_boost <- cat_boost %>% predict(X_test)
+            preds_boostP <- cat_boost %>% predict(X_test, type="prob")
+            preds_boost <- colnames(preds_boostP)[apply(preds_boostP, 1, which.max)]
+            
             test_errors["gradBoost", "categorical"] <- length(which(y_test_cat != preds_boost)) / length(y_test_cat)
-            confusion_cat[["gradBoost"]] <- confusionMatrix(data = preds_boost, reference = y_test_cat)
+            confusion_cat[["gradBoost"]] <- confusionMatrix(data = as.factor(preds_boost), reference = y_test_cat)
+            
+            predictions["gradBoost", "categorical"] <- names(which.max((cat_boost %>% predict(X_emp, type="prob"))))
+            predictions["gradBoost", 4:7] <- cat_boost %>% predict(X_emp, type="prob")
+            
             
             # continuous 
             cont_boost <- train(
@@ -1465,42 +1520,58 @@ source("_functions.R")
                                      gamma = 0,
                                      subsample = 1)
             )
+            
             preds_boost <- cont_boost %>% predict(X_test)
             test_errors["gradBoost", "RMSE"] <- RMSE(preds_boost, y_test_cont)
             
+            predictions["gradBoost", "perc_frauded"] <- cont_boost %>% predict(X_emp)
+            predictions["gradBoost", "sd(yhat-y)"] <- sd(preds_boost - y_test_cont)
             
-        #' --------------------------------------------------
-        #  (iii) create prediction for empirical case -------
-        #' --------------------------------------------------
+          } # end gradBoost
         
+        # end parallelization 
+        if(parallel)
+          stopCluster(cl) 
+        
+        #' -------------------------------------------------------
+        #  (iii) construct measures for feature importance -------
+        #' -------------------------------------------------------
+        
+          # for artificial data
+        
+        
+        
+          # for empirical data
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        #' ---------------------------
+        #  (iv) output objects -------
+        #' ---------------------------
+        
+          if(is.element("regul_reg", models)) {
+            models <- models[-which(models=="regul_reg")]
+            models <- c(models, "ridge", "lasso")
+          }  
           
-            # ich brauche eine Funktion gen_features()- die mir die ganzen features für X_train 
-            # generiert. Ich brauche das nämlich einmal innerhalb von gen_data() und einmal innerhalb von 
-            # ml_detect() für den empirischen case
+          predictions <- predictions[models,]
+        
+          out_list <- list("performance on artifical data" = test_errors, 
+                           "predictions for case" = predictions)
+          return(out_list)
           
-            
-            
-            
-            ##### add parallelization with doSNOW
-            
-            #### add predictions (incl. probabilities) for empirical case
-            ##### default is using best method, but one can also specify method
-            
-            ##### add how to inspect feature importance
-            
-            
   }
   
       
   sim_elections <- ml_detect(data=as.data.frame(aus08), n_elections = 100) 
 
 
-##### which models to use for machine learning? Models that can do classification and prediction
-# kNN 
-# ridge, lasso
-# random Forest, BART
-# neural network
- 
 
   aus08 <- as.data.frame(aus08)
   
