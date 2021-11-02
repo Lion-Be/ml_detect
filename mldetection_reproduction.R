@@ -1192,7 +1192,7 @@ source("_functions.R")
                                   fraud_extB = sim_scenarios[scenario, "fraud_extB"],
                                   agg_factor = 1, 
                                   n_elections = n_elections,
-                                  data_type = "full",
+                                  data_type = "num_char",
                                   baseline_A = val_opt[1,"baseline_a"],  
                                   baseline_B = val_opt[1,"baseline_b"] 
                                   )
@@ -1204,7 +1204,7 @@ source("_functions.R")
                sim_elections <- rbind(sim_elections, output)
                )
         
-        if (scenario %% 1000 == 0) 
+        if (scenario %% 100 == 0) 
           print(str_c("scenario: ", scenario, " out of ", nrow(sim_scenarios), ", ", Sys.time()))
         
         } # end for scenario in 1:nrow(scenarios)
@@ -1234,7 +1234,7 @@ source("_functions.R")
         confusion_cat <- list()
         
         # predictions on empirical case from trained models
-        predictions <- as.data.frame(matrix(NA, nrow=5, ncol=10))
+        predictions <- as.data.frame(matrix(NA, nrow=5, ncol=9))
         rownames(predictions) <- c("kNN", "ridge", "lasso", "randomForest", "gradBoost")
         colnames(predictions) <- c("binary", "p(fraud|X)", "categorical", "p(clean|X)", "p(bbs|X)", 
                                    "p(stealing|X)", "p(switching|X)", "perc_frauded", "sd(yhat-y)")
@@ -1253,7 +1253,7 @@ source("_functions.R")
         
         # define trControl settings that are agnostic to the specific method
         tr_settings <- trainControl(method = "cv", 
-                                    number = 10, 
+                                    number = 5, 
                                     repeats=NA, 
                                     search="grid")
         
@@ -1533,22 +1533,31 @@ source("_functions.R")
         if(parallel)
           stopCluster(cl) 
         
-        #' -------------------------------------------------------
-        #  (iii) construct measures for feature importance -------
-        #' -------------------------------------------------------
+        #' -------------------------------
+        #  (iii) save final models -------
+        #' -------------------------------
         
-          # for artificial data
+          final_models <- list()
         
+          final_models[["kNN"]][["binary"]] <- binary_knn
+          final_models[["kNN"]][["categorical"]] <- cat_knn
+          final_models[["kNN"]][["continuous"]] <- cont_knn
         
-        
-          # for empirical data
-        
-        
-        
-        
-        
-        
-        
+          final_models[["ridge"]][["binary"]] <- binary_ridge
+          final_models[["ridge"]][["categorical"]] <- cat_ridge
+          final_models[["ridge"]][["continuous"]] <- cont_ridge
+          
+          final_models[["lasso"]][["binary"]] <- binary_lasso
+          final_models[["lasso"]][["categorical"]] <- cat_lasso
+          final_models[["lasso"]][["continuous"]] <- cont_lasso
+          
+          final_models[["randomForest"]][["binary"]] <- binary_rf
+          final_models[["randomForest"]][["categorical"]] <- cat_rf
+          final_models[["randomForest"]][["continuous"]] <- cont_rf
+          
+          final_models[["gradBoost"]][["binary"]] <- binary_boost
+          final_models[["gradBoost"]][["categorical"]] <- cat_boost
+          final_models[["gradBoost"]][["continuous"]] <- cont_boost
         
         
         #' ---------------------------
@@ -1562,14 +1571,15 @@ source("_functions.R")
           
           predictions <- predictions[models,]
         
-          out_list <- list("performance on artifical data" = test_errors, 
-                           "predictions for case" = predictions)
+          out_list <- list("performance in the laboratory setting, simulated data" = test_errors, 
+                           "predictions for case" = predictions, 
+                           "final models" = final_models)
           return(out_list)
           
   }
   
       
-  sim_elections <- ml_detect(data=as.data.frame(aus08), n_elections = 100) 
+  sim_elections <- ml_detect(data=as.data.frame(aus08), n_elections = 1) 
 
 
 
