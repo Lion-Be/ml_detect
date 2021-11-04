@@ -6,7 +6,7 @@
 #' install and load packages
 packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
               "stringr", "dplyr", "readxl", "tikzDevice", "distantia", "doSNOW", 
-              "caret", "glmnet", "class", "randomForest", "xgboost")
+              "caret", "glmnet", "class", "randomForest", "xgboost", "LaplacesDemon")
 
 for (i in 1: length(packages)) {
   if (is.element(packages[i], installed.packages()[,1]) == FALSE) 
@@ -29,8 +29,8 @@ source("_functions.R")
                        partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
-                       agg_factor = 1, n_elections = 1000, data_type = "full",
-                       baseline_A = NA, baseline_B = NA, baseline_gen = F) {  
+                       agg_factor = 1, n_elections = 1, data_type = "full",
+                       optimize_only = F, shareA = NA) {  
     
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
@@ -50,120 +50,55 @@ source("_functions.R")
     #              no aggregation for agg_factor = 1
     # n_elections = number of elections to generate 
     # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
-    # baseline_A/B = baseline values to scale BF distribution. If not specified, function optimizes for these
-    # baseline_gen = should function only be run in order to generate baseline_A/B values, without artificial data generation?
+    # optimize_only = should function only be run in order to generate shareA permutation without artifical data?
+    # shareA = pre-specified shareA vector that has been optimized for
+    
+    #' -------------------------------------------
+    #  (i) optimize for shareA permutation -------
+    #' -------------------------------------------
    
-    #' ----------------------------------------
-    #  (i) optimize for baseline values -------
-    #' ----------------------------------------
+      # optimize for shareA permutation such that it minimizes
+      # the KL divergence between BL2_empirical and BL2_expected
    
-      # optimize for constants baseline_a and baseline_b such that 
-      # they minimize distance to multivariate normal p(turnout, party share)
-      val_combs <- expand.grid(seq(0,1000,10), 
-                                 seq(0,1000,10))
-      colnames(val_combs) <- c("baseline_a", "baseline_b")  
-   
-      if (is.na(baseline_A) & is.na(baseline_B)) {
-        
-        KL_vec <- rep(NA, nrow(val_combs))
+      turnout <- rtruncnorm(length(eligible), 0, 1, turnout_mean, turnout_sd)
       
-        # optimize for constants baseline_a and baseline_b such that 
-        # they minimize distance between simulated eligible-vector and 
-        # empirical eligible-vector (euclidean distance)
-        # ED_vec <- rep(NA, nrow(val_combs))
+      if (is.na(shareA)) {
         
-        for (val in 1:nrow(val_combs)) {
+        shareA <- rtruncnorm(length(eligible), 0, 1, partyA_mean, partyA_sd)
+        
+        n_perm <- 1000
+        shareA_shuffled <- matrix(NA, nrow=length(eligible), ncol=n_perm)
+        KL_div <- rep(NA, n_perm)
+        
+        for (perm in 1:n_perm) {
           
-          # generate variable following Benford's law
-          X_a <- 10 ^ runif(n_entities, 0, 1) 
-          X_b <- 10 ^ runif(n_entities, 0, 1) 
+          # shuffle shareA vector
+          shareA_shuffled[, perm] <- sample(shareA, length(shareA))
           
-          # constants for scaling
-          baseline_a <- val_combs[val, "baseline_a"]
-          baseline_b <- val_combs[val, "baseline_b"]
+          # apply turnout, shareA-values to eligible vector
+          votes_all <- eligible * turnout
+          votes_a <- round(votes_all * shareA_shuffled[, perm], digits = 0)
+          votes_b <- round(votes_all - votes_a, digits = 0)
           
-          # latent support rates
-          l_support_a <- as.integer(baseline_a * X_a) 
-          l_support_b <- as.integer(baseline_b * X_b)
+          # calculate KL divergence 
+          dis_emp <- table(extract_digit(votes_a, 2)) / length(votes_a)
+          dis_exp <- benford_expected(2)
           
-          # construct vote totals from turnout distribution 
-          turnout <- rtruncnorm(n_entities, 0, 1, turnout_mean, turnout_sd)
-         
-          l_total <- l_support_a + l_support_b # total latent support
-          l_share_a <- l_support_a/(l_support_a+l_support_b)
-          l_share_b <- 1-l_share_a
-          
-          votes_all <- l_total * turnout
-          votes_a <- round(votes_all * l_share_a, digits = 0)
-          votes_b <- round(votes_all * l_share_b, digits = 0)
-          
-          ### turnout, votes_a, votes_b are the final variables
-          ### do they follow the characteristics that they should?
-          
-          ### basically: just perform my protocol for data construction 
-          ### then look which baseline values minimize KL-distance between two 
-          ### multivariate distributions p(turnout, shareA), where shareA
-          ### is once defined via empirical values and once defined via 
-          ### what is implied by baseline_a and baseline_b
-          ### so I find the values of baseline_a and baseline_b that in the end
-          ### resemble the empirical vote shares
-          
-          # define multivariate normal based on value combination chosen 
-          vcov_val <- matrix(c(var(turnout), 
-                               cov(turnout, l_share_a), 
-                               cov(turnout, l_share_a), 
-                               var(l_share_a)),
-                             nrow=2, ncol=2)
-                                
-          mu_val <- c(mean(turnout), mean(l_share_a))
-          
-          # define multivariate normal based on empirical input values
-          vcov_emp <- matrix(c(turnout_sd^2, 
-                               0,
-                               0,
-                               partyA_sd^2),
-                             nrow=2, ncol=2)
-          mu_emp <- c(turnout_mean, partyA_mean)
-          
-          # calculate symmetric KL divergence
-          KL_vec[val] <- normdiff(mu1 = mu_emp, sigma1 = vcov_emp,
-                                  mu2 = mu_val, sigma2 = vcov_val,
-                                  method="KL")
-          
-          # calculate euclidean distance 
-          # ED_vec[val] <- distance(sort(l_total), sort(eligible), 
-          #                        method="euclidean")
-          
-          if (val %% 1000 == 0)
-            print(str_c("optimization progress: ", val, " out of ", nrow(val_combs)))
+          KL_div[perm] <- LaplacesDemon::KLD(dis_emp, dis_exp)$mean.sum.KLD
           
         } # end optimization
-      } # end if (is.na(baseline_A) & is.na(baseline_B))
-       
-      # find value combination for baseline_a and baseline_b that 
-      # minimizes summed up KL and ED distance
-      # val_combs$KL_relpos <- val_combs$ED_relpos <- NA
-      # for (val in 1:nrow(val_combs)) {
-      #   if (length(which(sort(KL_vec) == KL_vec[val])) > 0)
-      #     val_combs$KL_relpos[val] <- which(sort(KL_vec) == KL_vec[val])
-      #   if (length(which(sort(ED_vec) == ED_vec[val])) > 0)
-      #     val_combs$ED_relpos[val] <- which(sort(ED_vec) == ED_vec[val])
-      # }
-      # val_combs$dist_sum <- val_combs$KL_relpos + val_combs$ED_relpos
-      # 
-      # val_combs <- val_combs[-which(is.na(val_combs$dist_sum)),]
-      # val_opt <- val_combs[which(val_combs$dist_sum == min(val_combs$dist_sum)),]
-    
-    ifelse(is.na(baseline_A) & is.na(baseline_B),
-           val_opt <- val_combs[which(KL_vec == KL_vec[order(KL_vec)][1]),],
-           {val_opt <- val_combs[1,]
-           val_opt[1, "baseline_a"] <- baseline_A
-           val_opt[1, "baseline_b"] <- baseline_B}
-           )  
-    
-      # val_optED <- val_combs[which(ED_vec == ED_vec[order(ED_vec)][1]),]
-    if (baseline_gen) {
-      return(val_opt)
+        
+        ### could also minimize a multidimensional KL divergence? second and last digits?
+        
+        used_perm <- which.min(KL_div)
+        shareA <- shareA_shuffled[, used_perm] 
+        
+        print("optimization done.")
+         
+      } # end if (is.na(shareA))
+     
+    if (optimize_only) {
+      return(shareA)
       break
     }
       
@@ -179,29 +114,10 @@ source("_functions.R")
       # clean election data
       #' ----------------------
       
-        # generate variable following Benford's law
-        X_a <- 10 ^ runif(n_entities, 0, 1) 
-        X_b <- 10 ^ runif(n_entities, 0, 1) 
-        
-        # constants for scaling
-        baseline_a <- val_opt[1, "baseline_a"]
-        baseline_b <- val_opt[1, "baseline_b"]
-        
-        # latent support rates
-        l_support_a <- as.integer(baseline_a * X_a) 
-        l_support_b <- as.integer(baseline_b * X_b)
-        
-        # construct vote totals from turnout distribution 
-        turnout <- rtruncnorm(n_entities, 0, 1, turnout_mean, turnout_sd)
-        
-        l_total <- l_support_a + l_support_b # total latent support
-        l_share_a <- l_support_a/(l_support_a+l_support_b)
-        l_share_b <- 1-l_share_a
-        
-        votes_all <- as.integer(l_total * turnout)
-        votes_a <- as.integer(votes_all * l_share_a)
-        votes_b <- votes_all - votes_a
-        non_voters <- l_total - votes_a - votes_b
+        votes_all <- eligible * turnout
+        votes_a <- round(votes_all * shareA, digits = 0)
+        votes_b <- round(votes_all - votes_a, digits = 0)
+        non_voters <- eligible - votes_all
     
         n_frauded <- 0
         
@@ -224,23 +140,23 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd((non_voters/l_total))))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd((non_voters/eligible))))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
-                non_voters <- l_total - votes_a - votes_b
+                non_voters <- eligible - votes_a - votes_b
                 n_frauded <- n_frauded + sum(moved_votes)
               }           
                   
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes 
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -259,23 +175,23 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/l_total)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/eligible)))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
-                non_voters <- l_total - votes_a - votes_b
+                non_voters <- eligible - votes_a - votes_b
                 n_frauded <- n_frauded + sum(moved_votes)
               }           
               
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes 
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
+                share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
@@ -301,23 +217,23 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/l_total)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/eligible)))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
-                non_voters <- l_total - votes_a - votes_b
+                non_voters <- eligible - votes_a - votes_b
                 n_frauded <- n_frauded + sum(moved_votes)
               }           
               
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes  
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/l_total)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
                 moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                 votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -336,23 +252,23 @@ source("_functions.R")
               
               # ballot box stuffing
               if (fraud_type == "bbs") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/l_total)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/eligible)))
                 moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
-                non_voters <- l_total - votes_a - votes_b
+                non_voters <- eligible - votes_a - votes_b
                 n_frauded <- n_frauded + sum(moved_votes)
               }           
               
               # vote stealing
               if (fraud_type == "stealing") {
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes  
                 n_frauded <- n_frauded + sum(moved_votes)
               }
               # vote switching
               if (fraud_type == "switching") { 
-                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/l_total)))
+                share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
                 moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                 votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
                 votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
@@ -376,8 +292,8 @@ source("_functions.R")
         #' --------------------------------------------------
           
         votes_all <- votes_a + votes_b 
-        turnout <- votes_all / l_total
-        non_voters <- l_total - votes_a - votes_b
+        turnout <- votes_all / eligible
+        non_voters <- eligible - votes_all
         
         
         #' ------------------------------------
@@ -385,26 +301,26 @@ source("_functions.R")
         #' ------------------------------------
           
           if (agg_factor == 1)  
-            data <- as.data.frame(cbind(1:n_entities, l_total, votes_all, votes_a, votes_b, 
+            data <- as.data.frame(cbind(1:n_entities, eligible, votes_all, votes_a, votes_b, 
                                         non_voters, turnout, votes_a/votes_all, votes_b/votes_all))
           
           if (agg_factor > 1) {
             
             n_entities_agg <- n_entities / agg_factor
             agg_id <- sort(rep(1:n_entities_agg, agg_factor))
-            data <- as.data.frame(cbind(1:n_entities, agg_id, l_total, votes_all, votes_a, votes_b, 
+            data <- as.data.frame(cbind(1:n_entities, agg_id, eligible, votes_all, votes_a, votes_b, 
                                         non_voters, turnout, votes_a/votes_all, votes_b/votes_all))
             data <- data %>% 
               group_by(agg_id) %>% 
               summarise(agg_id = mean(agg_id), 
-                        l_total = sum(l_total), 
+                        eligible = sum(eligible), 
                         votes_all = sum(votes_all),
                         votes_a = sum(votes_a), 
                         votes_b = sum(votes_b), 
                         non_voters = sum(non_voters))
-            data$turnout <- data$votes_all / data$l_total
-            data$share_A <- data$votes_a / data$votes_all
-            data$share_B <- data$votes_b / data$votes_all
+            data$turnout <- data$votes_all / data$eligible
+            data$shareA <- data$votes_a / data$votes_all
+            data$shareB <- data$votes_b / data$votes_all
             
           } 
            
@@ -414,8 +330,8 @@ source("_functions.R")
         #' -----------------------------------------------------------
        
           colnames(data) <- c("id", "eligible", "votes_total", "votes_a", "votes_b",  
-                              "non_voters", "turnout", "share_A", "share_B")   
-          
+                              "non_voters", "turnout", "shareA", "shareB")   
+        
           if (data_type == "full") 
             data_list[[election]] <- data
             
@@ -438,7 +354,7 @@ source("_functions.R")
             
             # numerical characteristics (X)
             data_charX <- gen_features(data$votes_a, data$votes_b, data$turnout, 
-                                       data$share_A, data$share_B)
+                                       data$shareA, data$shareB)
             
             data_char <- cbind(data_char, data_charX)
             
@@ -460,9 +376,9 @@ source("_functions.R")
         
   } # end function gen_data
 
-  sim_elections1 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="clean", 
+  sim_elections1 <- gen_data(n_elections = 100, n_entities = 1000, fraud_type="clean", 
                              fraud_incA = 0, fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
-                            agg_factor = 1, data_type="num_char")
+                             agg_factor = 1, data_type="full")
   sim_elections2 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="bbs", 
                              fraud_incA = 0.2, fraud_extA = 0.04, fraud_incB = 0, fraud_extB = 0, 
                              agg_factor = 1, data_type="num_char")
@@ -838,7 +754,7 @@ source("_functions.R")
                                 partyB_mean = mean(aus08$share_ovp), 
                                 partyB_sd = sd(aus08$share_ovp),
                                 fraud_type = "clean",
-                                n_elections = 10
+                                n_elections = 1
                                 )
           
       #' ----------------------------------------------------
@@ -872,7 +788,7 @@ source("_functions.R")
                                 partyB_mean = mean(esp19$share_pp), 
                                 partyB_sd = sd(esp19$share_pp),
                                 fraud_type = "clean",
-                                n_elections = 10
+                                n_elections = 1
           )
           
           
@@ -920,7 +836,7 @@ source("_functions.R")
                                 partyB_mean = mean(fin17$share_sdp), 
                                 partyB_sd = sd(fin17$share_sdp),
                                 fraud_type = "clean",
-                                n_elections = 10
+                                n_elections = 1
           )
           
           
@@ -949,7 +865,7 @@ source("_functions.R")
     # 2.2.2 digits ------
     #' ------------------
     
-      plot_digits_all(aus08_syn[[1]]$votes_a, aus08_syn[[1]]$votes_b)
+      plot_digits_all(fin17_syn[[1]]$votes_a, fin17_syn[[1]]$votes_b)
       plot_digits_1last(aus08$SPÖ, aus08_syn)
       
       tikz('digit_comparisons.tex', standAlone = TRUE, width=9, height=6)
@@ -1061,14 +977,14 @@ source("_functions.R")
             # empirical
             par(mar = c(2.8, 2.8, 1, 1))
             image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\%Votes for Winner", xlab="\\%Turnout")    
-            k <- kde2d(aus08$turnout, aus08$share_spo, n=50)
+            k <- kde2d(fin17$turnout, fin17$share_kok, n=50)
             image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
             text(0.23, 0.95, "Austria 2008, Empirical", col="white")
             
             # synthetic
             par(mar = c(2.8, 1.5, 1, 2.3))
             image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="\\%Turnout")    
-            k <- kde2d(aus08_syn[[1]]$turnout, aus08_syn[[1]]$share_A, n=50)
+            k <- kde2d(fin17_syn[[1]]$turnout, fin17_syn[[1]]$shareA, n=50)
             image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
             text(0.23, 0.95, "Austria 2008, Synthetic", col="white")
             
