@@ -29,7 +29,8 @@ source("_functions.R")
                        partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
                        partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
-                       agg_factor = 1, n_elections = 1, data_type = "full") {  
+                       agg_factor = 1, n_elections = 100, data_type = "full",
+                       nuisance = 0.05, turnout = NA, shareA = NA, optimize_only = F) {  
     
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
@@ -49,13 +50,15 @@ source("_functions.R")
     #              no aggregation for agg_factor = 1
     # n_elections = number of elections to generate 
     # data_type = is full data frame across n_entities stored or only numerical characteristics (data_type = "num_char")
+    # nuisance = nuisance parameter for rnorm() to be applied id data_type=="num_char"
+    # turnout = turnout vector that was optimized for 
+    # shareA = shareA vector that was optimized for
+    # optimize_only = should the function only be executed to construct turnout/shareA vector?
    
-    data_list <- list() # empty list for generated election dataframes
-    
-    for (election in 1:n_elections) {
     
       #' -------------------------------------------
       #  (i) optimize for shareA permutation -------
+      if (is.na(turnout[1]) & is.na(shareA[1])) { 
       #' -------------------------------------------
      
         # optimize for shareA permutation such that it minimizes
@@ -64,7 +67,7 @@ source("_functions.R")
         turnout <- rtruncnorm(length(eligible), 0, 1, turnout_mean, turnout_sd)
         shareA <- rtruncnorm(length(eligible), 0, 1, partyA_mean, partyA_sd)
         
-        n_perm <- 100
+        n_perm <- 1000
         shareA_shuffled <- matrix(NA, nrow=length(eligible), ncol=n_perm)
         KL_div <- rep(NA, n_perm)
         
@@ -86,14 +89,25 @@ source("_functions.R")
           
         } # end optimization
         
+        print("optimization done.")
         ### could also minimize a multidimensional KL divergence? second and last digits?
         
         used_perm <- which.min(KL_div)
         shareA <- shareA_shuffled[, used_perm] 
        
-      #' ----------------------------------------------
-      # (ii) generate n=n_elections datasets ----------
-      #' ----------------------------------------------
+      } # end if (is.na(turnout) & is.na(shareA))
+    
+        if (optimize_only) {
+          out <- list(turnout, shareA)
+          names(out) <- c("turnout", "shareA")
+          return(out)
+          break
+        }
+      
+        
+      #' -----------------------------------------------------------------
+      # (ii) generate artifical data for parameter setting once ----------
+      #' -----------------------------------------------------------------
        
         #'----------------------
         # clean election data
@@ -268,9 +282,9 @@ source("_functions.R")
           
           
           
-        #' ------------------------------------------------------------
-        #  (iii) redefine variables, aggregate data, store data -------
-        #' ------------------------------------------------------------
+        #' ------------------------------------------------
+        #  (iii) redefine variables, aggregate data -------
+        #' ------------------------------------------------
           
           #' --------------------------------------------------
           # redefine variables that are affected by fraud
@@ -317,11 +331,16 @@ source("_functions.R")
             colnames(data) <- c("id", "eligible", "votes_total", "votes_a", "votes_b",  
                                 "non_voters", "turnout", "shareA", "shareB")   
           
-            if (data_type == "full") 
-              data_list[[election]] <- data
+            if (data_type == "full") {
+              if (n_elections > 1)
+                print(str_c("n_elections = ", n_elections, " but full data is generated for only one election."))
               
-            
-            
+              data_final <- data
+              return(data_final)
+              break
+              # if full election data is requested, n_elections is forced to be 1
+            } 
+              
             if (data_type == "num_char") {
             
               data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
@@ -341,41 +360,33 @@ source("_functions.R")
               data_charX <- gen_features(data$votes_a, data$votes_b, data$turnout, 
                                          data$shareA, data$shareB)
               
-              data_char <- cbind(data_char, data_charX)
-              
-              ifelse(election == 1,
-                     data_list <- data_char, 
-                     data_list <- rbind(data_list, data_char)
-              )
-             
+              data_yX <- cbind(data_char, data_charX)
+     
             } # end if (data_type == "num_char")
             
-        if (election %% 100 == 0)
-          print(str_c("election ", election, " out of ", n_elections, " simulated."))
-          
             
-    } # end for election in 1:n_elections
-    
+        #' ---------------------------------------------------------------------
+        #  (iv) replicate elections by n_elections, add nuisance parameter -----
+        #' ---------------------------------------------------------------------
+        
+          # replicate election n_elections times
+          data_yX <- rbind(data_yX, data_yX[rep(1, (n_elections-1)),])
+        
+          # add nuisance parameter
+          data_yX[,9:35] <- apply(data_yX[,9:35], MARGIN = 2, rnorm, n = n_elections, sd = nuisance)
+          data_final <- data_yX  
+            
     # return list of generated elections      
-    return(data_list)
+    return(data_final)
     
         
   } # end function gen_data
 
-  sim_elections1 <- gen_data(n_elections = 10, n_entities = 1000, fraud_type="clean", 
-                             fraud_incA = 0, fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
-                             agg_factor = 1, data_type="num_char")
-  sim_elections2 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="bbs", 
-                             fraud_incA = 0.2, fraud_extA = 0.04, fraud_incB = 0, fraud_extB = 0, 
-                             agg_factor = 1, data_type="num_char")
-  sim_elections3 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="stealing", 
-                             fraud_incA = 0.1, fraud_extA = 0.04, fraud_incB = 0.08, fraud_extB = 0.05, 
-                             agg_factor = 1, data_type="num_char")
-  sim_elections4 <- gen_data(n_elections = 100, n_entities = 100, fraud_type="switching", 
-                             fraud_incA = 0, fraud_extA = 0, fraud_incB = 0.12, fraud_extB = 0.03, 
-                             agg_factor = 1, data_type="num_char")
-  sim_elections <- rbind(sim_elections1, sim_elections2, sim_elections3, sim_elections4)
   
+  sim_elections <- gen_data(n_elections = 100, n_entities = 1000, fraud_type="bbs", 
+                      fraud_incA = 00, fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
+                      agg_factor = 1, data_type="num_char", nuisance = 0.05)
+ 
     
         
 #' ------------------------------------------------------------------
@@ -955,12 +966,11 @@ source("_functions.R")
 #' --------------------------------------------------------------------- 
 
   ml_detect <- function(data = aus08, eligible = aus08$eligible, turnout = aus08$turnout, 
-                        votes_a = aus08$SPÖ, votes_b = aus08$ÖVP, share_A = aus08$share_spo, 
-                        share_B = aus08$share_ovp, 
-                        fraud_incA = seq(0.01, 0.3, 0.01), fraud_extA = seq(0.01, 0.05, 0.01),
-                        fraud_incB = seq(0.01, 0.3, 0.01), fraud_extB = seq(0.01, 0.05, 0.01),
+                        votes_a = aus08$SPÖ, votes_b = aus08$ÖVP, shareA = aus08$share_spo, 
+                        shareB = aus08$share_ovp, 
+                        fraud_incA = seq(0.01, 0.30, 0.01), fraud_extA = seq(0.01, 0.05, 0.01),
                         fraud_types = c("bbs", "stealing", "switching"),
-                        n_elections = 1, models = c("kNN", "regul_reg", "randomForest", "gradBoost"), 
+                        n_elections = 100, models = c("kNN", "regul_reg", "randomForest", "gradBoost"), 
                         seed=12345, parallel = T) {
     
     # data = data of empirical case 
@@ -1006,34 +1016,49 @@ source("_functions.R")
     
       # define scenarios that models are trained on 
       # set up in a way that 50% of scenarios are clean, rest is frauded to different degrees
-      fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, fraud_incB, fraud_extB, fraud_types))
-      clean_scenarios <- as.data.frame(matrix(0, nrow = nrow(fraud_scenarios), ncol = 5))
+      fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, fraud_types))
+      clean_scenarios <- as.data.frame(matrix(0, nrow = nrow(fraud_scenarios), ncol = 3))
       colnames(fraud_scenarios) <- colnames(clean_scenarios) <- 
-        c("fraud_incA", "fraud_extA", "fraud_incB", "fraud_extB", "type")
+        c("fraud_incA", "fraud_extA", "type")
       clean_scenarios$type <- "clean"
       sim_scenarios <- rbind(fraud_scenarios, clean_scenarios)
-     
+      # nrow(sim_scenarios) * n_elections is the number of artifical elections that models are trained on
+      
+      # optimize for turnout, shareA
+      opt_vecs <- gen_data(n_entities = nrow(data), 
+                           eligible = eligible,
+                           turnout_mean = mean(turnout), 
+                           turnout_sd = sd(turnout),
+                           partyA_mean = mean(shareA),
+                           partyA_sd = sd(shareA), 
+                           partyB_mean = mean(shareB), 
+                           partyB_sd = sd(shareB), 
+                           optimize_only = T
+                           )
+      
       # generate n_elections artificial cases under each scenario in sim_scenarios
       Sys.time()
       for (scenario in 1:nrow(sim_scenarios)) {
       
         output <- gen_data(n_entities = nrow(data), 
-                                  eligible = eligible,
-                                  turnout_mean = mean(turnout), 
-                                  turnout_sd = sd(turnout),
-                                  partyA_mean = mean(share_A),
-                                  partyA_sd = sd(share_A), 
-                                  partyB_mean = mean(share_B), 
-                                  partyB_sd = sd(share_B), 
-                                  fraud_type = sim_scenarios[scenario, "type"],
-                                  fraud_incA = sim_scenarios[scenario, "fraud_incA"],
-                                  fraud_extA = sim_scenarios[scenario, "fraud_extA"],
-                                  fraud_incB = sim_scenarios[scenario, "fraud_incB"],
-                                  fraud_extB = sim_scenarios[scenario, "fraud_extB"],
-                                  agg_factor = 1, 
-                                  n_elections = n_elections,
-                                  data_type = "num_char"
-                                  )
+                           eligible = eligible,
+                           turnout_mean = mean(turnout), 
+                           turnout_sd = sd(turnout),
+                           partyA_mean = mean(shareA),
+                           partyA_sd = sd(shareA), 
+                           partyB_mean = mean(shareB), 
+                           partyB_sd = sd(shareB), 
+                           fraud_type = sim_scenarios[scenario, "type"],
+                           fraud_incA = sim_scenarios[scenario, "fraud_incA"],
+                           fraud_extA = sim_scenarios[scenario, "fraud_extA"],
+                           fraud_incB = 0,
+                           fraud_extB = 0,
+                           agg_factor = 1, 
+                           n_elections = n_elections,
+                           data_type = "num_char", 
+                           turnout = opt_vecs$turnout, 
+                           shareA = opt_vecs$shareA
+                           )
         
         ##### dauert das rbind länger??? lieber in Liste speichern und 
         ##### dann einmal unlisten. ist glaube ich weniger Rechenaufwand
@@ -1076,7 +1101,7 @@ source("_functions.R")
         rownames(predictions) <- c("kNN", "ridge", "lasso", "randomForest", "gradBoost")
         colnames(predictions) <- c("binary", "p(fraud|X)", "categorical", "p(clean|X)", "p(bbs|X)", 
                                    "p(stealing|X)", "p(switching|X)", "perc_frauded", "sd(yhat-y)")
-        X_emp <- gen_features(votes_a, votes_b, turnout, share_A, share_B)
+        X_emp <- gen_features(votes_a, votes_b, turnout, shareA, shareB)
         
         # define variables
         X_train <- model.matrix(fraud ~., train[,-c(2:8)])[,-1]
@@ -1434,8 +1459,8 @@ source("_functions.R")
                      fraud_type = sim_scenarios[scenario, "type"],
                      fraud_incA = sim_scenarios[scenario, "fraud_incA"],
                      fraud_extA = sim_scenarios[scenario, "fraud_extA"],
-                     fraud_incB = sim_scenarios[scenario, "fraud_incB"],
-                     fraud_extB = sim_scenarios[scenario, "fraud_extB"],
+                     fraud_incB = 0,
+                     fraud_extB = 0,
                      agg_factor = 1, 
                      n_elections = n_elections,
                      data_type = "num_char",
