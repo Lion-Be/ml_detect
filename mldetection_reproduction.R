@@ -122,7 +122,7 @@ source("_functions.R")
           
         #'----------------------------
         # manipulated data
-        if (fraud_type != "clean") {
+        if (fraud_type[1] != "clean") {
         #' ---------------------------
           
             #' -------------------------------------
@@ -135,11 +135,15 @@ source("_functions.R")
               if (fraud_incA > 0) {
               #' -----------------------------------
               
+                # only sample units with larger turnout values than median
+                # the left part of distribution is left untouched
+                # fraud_ids <- sample(which(turnout > summary(turnout)[2]), size = n_entities * fraud_incA)
                 fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incA)
+                fraud_width <- sd(shareA[which(shareA > median(shareA))])
                 
                 # ballot box stuffing
-                if (fraud_type == "bbs") {
-                  share_moved <- abs(rnorm(length(fraud_ids), 0, sd((non_voters/eligible))))
+                if (str_detect(paste(fraud_type, collapse = " "), "bbs")) {
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA, fraud_width))
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
@@ -147,15 +151,16 @@ source("_functions.R")
                 }           
                     
                 # vote stealing
-                if (fraud_type == "stealing") {
-                  share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "stealing")) {
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA, fraud_width))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes 
+                  non_voters <- eligible - votes_a - votes_b
                   n_frauded <- n_frauded + sum(moved_votes)
                 }
                 # vote switching
-                if (fraud_type == "switching") { 
-                  share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA, fraud_width))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -186,6 +191,7 @@ source("_functions.R")
                   share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
                   moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes 
+                  non_voters <- eligible - votes_a - votes_b
                   n_frauded <- n_frauded + sum(moved_votes)
                 }
                 # vote switching
@@ -211,12 +217,16 @@ source("_functions.R")
               # fraud in favor of partyA
               if (fraud_extA > 0) {
               #' -----------------------------------
-                
+               
+                # only sample units with larger turnout values than median
+                # the left part of distribution is left untouched
+                # fraud_ids <- sample(which(turnout > summary(turnout)[2]), size = n_entities * fraud_extA)
                 fraud_ids <- sample(1:n_entities, size = n_entities * fraud_extA)
+                fraud_width <- sd(shareA[which(shareA > median(shareA))])
                 
                 # ballot box stuffing
-                if (fraud_type == "bbs") {
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "bbs")) {
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA, fraud_width^2))
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
@@ -224,15 +234,16 @@ source("_functions.R")
                 }           
                 
                 # vote stealing
-                if (fraud_type == "stealing") {
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "stealing")) {
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA, fraud_width^2))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes  
+                  non_voters <- eligible - votes_a - votes_b
                   n_frauded <- n_frauded + sum(moved_votes)
                 }
                 # vote switching
-                if (fraud_type == "switching") { 
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_b/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA, fraud_width^2))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -263,6 +274,7 @@ source("_functions.R")
                   share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
                   moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes  
+                  non_voters <- eligible - votes_a - votes_b
                   n_frauded <- n_frauded + sum(moved_votes)
                 }
                 # vote switching
@@ -447,6 +459,20 @@ source("_functions.R")
       # synthetic
       #' ------------------------
     
+        # find fraud_incA and fraud_extA that resembles data most closely
+        opt_results <- gen_fraudvals(n_entities = nrow(ven04),
+                                     eligible = ven04$eligible,
+                                     turnout_mean = mean(ven04$turnout), 
+                                     turnout_sd = sd(ven04$turnout), 
+                                     partyA_mean = mean(ven04$share_no, na.rm=T), 
+                                     partyA_sd = sd(ven04$share_no, na.rm=T), 
+                                     partyB_mean = mean(ven04$share_si, na.rm=T), 
+                                     partyB_sd = sd(ven04$share_si, na.rm=T),
+                                     shareA = ven04$share_no, 
+                                     turnout = ven04$turnout, 
+                                     fraud_type = "bbs")
+        
+        # generate synthetic data using these values
         ven04_syn <- gen_data(n_entities = nrow(ven04),
                               eligible = ven04$eligible,
                               turnout_mean = mean(ven04$turnout), 
@@ -456,9 +482,12 @@ source("_functions.R")
                               partyB_mean = mean(ven04$share_si, na.rm=T), 
                               partyB_sd = sd(ven04$share_si, na.rm=T),
                               fraud_type = "bbs",
-                              fraud_incA = 0.2,
-                              fraud_extA = 0.04,
-                              n_elections = 10)
+                              fraud_incA = opt_results$valsV[1, "fraud_incA"],
+                              fraud_extA = opt_results$valsV[1, "fraud_extA"],
+                              n_elections = 1, 
+                              data_type = "full", 
+                              turnout = opt_results$`optimized vectors`$turnout, 
+                              shareA = opt_results$`optimized vectors`$shareA)
         
         
         
@@ -494,71 +523,44 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
-          #' -------------------------------------------------------------------------
-          ### first: find fraud_incA and fraud_extA that resembles data most closely
-          #' -------------------------------------------------------------------------
+          # find fraud_incA and fraud_extA that resembles data most closely
+          opt_resultsRU <- gen_fraudvals(n_entities = nrow(ru12),
+                                       eligible = ru12$eligible,
+                                       turnout_mean = mean(ru12$turnout), 
+                                       turnout_sd = sd(ru12$turnout), 
+                                       partyA_mean = mean(ru12$share_putin), 
+                                       partyA_sd = sd(ru12$share_putin), 
+                                       partyB_mean = mean(ru12$share_zyuganov), 
+                                       partyB_sd = sd(ru12$share_zyuganov),
+                                       shareA = ru12$share_putin, 
+                                       turnout = ru12$turnout, 
+                                       fraud_type = "bbs")
           
-            fraud_values <- seq(0, 1, 0.01)
-            fraud_values <- expand.grid(fraud_values, fraud_values)
-            colnames(fraud_values) <- c("fraud_incA", "fraud_extA")
-            fraud_values$euc_distV <- fraud_values$euc_distT <- NA
-            # baseline_A = 560
-            # baseline_B = 230
-            
-            for (row in 1:nrow(fraud_values)) {
-              
-              ru12_syn <- gen_data(n_entities = nrow(ru12),
-                                    eligible = ru12$eligible,
-                                    turnout_mean = mean(ru12$turnout), 
-                                    turnout_sd = sd(ru12$turnout), 
-                                    partyA_mean = mean(ru12$share_putin, na.rm=T), 
-                                    partyA_sd = sd(ru12$share_putin, na.rm=T), 
-                                    partyB_mean = mean(ru12$share_zyuganov, na.rm=T), 
-                                    partyB_sd = sd(ru12$share_zyuganov, na.rm=T),
-                                    fraud_type = "bbs",
-                                    fraud_incA = fraud_values[row, "fraud_incA"],
-                                    fraud_extA = fraud_values[row, "fraud_extA"],
-                                    n_elections = 1, 
-                                    baseline_A = 560, 
-                                    baseline_B = 230
-                                    
-              )
-              
-              fraud_values[row, "euc_distV"] <- 
-                distance(sort(ru12$share_putin), sort(ru12_syn[[1]]$share_A), method="euclidean")
-              
-              fraud_values[row, "euc_distT"] <- 
-                distance(sort(ru12$turnout), sort(ru12_syn[[1]]$turnout), method="euclidean")
-              
-              if (row %% 1000 == 0)
-                print(str_c("iteration ", row, " out of ", nrow(fraud_values)))
-              
-            }
-            
-            # which fraud values to use
-            ru12_valsV <- fraud_values[which(fraud_values$euc_distV == min(fraud_values$euc_distV)),]
-            ru12_valsT <- fraud_values[which(fraud_values$euc_distT == min(fraud_values$euc_distT)),]
-            
-            
-          #' -------------------------------------------------------------------------
-          ### second: generate synthetic data using these values
-          #' -------------------------------------------------------------------------
+          # generate synthetic data using these values
+          opt_vectorsRU <- gen_data(n_entities = nrow(ru12),
+                               eligible = ru12$eligible,
+                               turnout_mean = mean(ru12$turnout), 
+                               turnout_sd = sd(ru12$turnout[which(ru12$turnout < median(ru12$turnout))]), 
+                               partyA_mean = mean(ru12$share_putin), 
+                               partyA_sd = sd(ru12$share_putin[which(ru12$share_putin < median(ru12$share_putin))]), 
+                               partyB_mean = mean(ru12$share_zyuganov), 
+                               partyB_sd = sd(ru12$share_zyuganov),
+                               optimize_only = T)
           
-            ru12_syn <- gen_data(n_entities = nrow(ru12),
-                                  eligible = ru12$eligible,
-                                  turnout_mean = mean(ru12$turnout), 
-                                  turnout_sd = sd(ru12$turnout), 
-                                  partyA_mean = mean(ru12$share_putin), 
-                                  partyA_sd = sd(ru12$share_putin), 
-                                  partyB_mean = mean(ru12$share_zyuganov), 
-                                  partyB_sd = sd(ru12$share_zyuganov),
-                                  fraud_type = "bbs",
-                                  fraud_incA = 0,
-                                  fraud_extA = 0.04,
-                                  n_elections = 10)
-            
-            
           
+          ru12_syn <- gen_data(n_entities = nrow(ru12),
+                               eligible = ru12$eligible,
+                               turnout_mean = mean(ru12$turnout), 
+                               turnout_sd = sd(ru12$turnout), 
+                               partyA_mean = mean(ru12$share_putin), 
+                               partyA_sd = sd(ru12$share_putin), 
+                               partyB_mean = mean(ru12$share_zyuganov), 
+                               partyB_sd = sd(ru12$share_zyuganov),
+                               fraud_type = "bbs",
+                               fraud_incA = opt_results$valsV[1, "fraud_incA"],
+                               fraud_extA = opt_results$valsV[1, "fraud_extA"],
+                               n_elections = 1, 
+                               data_type = "full")
           
           
       
@@ -605,69 +607,46 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
-          #' -------------------------------------------------------------------------
-          ### first: find fraud_incA and fraud_extA that resembles data most closely
-          #' -------------------------------------------------------------------------
+          # find fraud_incA and fraud_extA that resembles data most closely
+          opt_results <- gen_fraudvals(n_entities = nrow(uga11),
+                                       eligible = uga11$eligible,
+                                       turnout_mean = median(uga11$turnout), 
+                                       turnout_sd = sd(uga11$turnout), 
+                                       partyA_mean = mean(uga11$share_museveni), 
+                                       partyA_sd = sd(uga11$share_museveni), 
+                                       partyB_mean = mean(uga11$share_besigye), 
+                                       partyB_sd = sd(uga11$share_besigye),
+                                       shareA = uga11$share_museveni, 
+                                       turnout = uga11$turnout, 
+                                       fraud_type = c("bbs", "switching"))
           
-            fraud_values <- seq(0, 1, 0.01)
-            fraud_values <- expand.grid(fraud_values, fraud_values)
-            colnames(fraud_values) <- c("fraud_incA", "fraud_extA")
-            fraud_values$euc_distV <- fraud_values$euc_distT <- NA
-            # baseline_A = ?
-            # baseline_B = ?
-            
-            for (row in 1:nrow(fraud_values)) {
-              
-              uga11_syn <- gen_data(n_entities = nrow(uga11),
-                                   eligible = uga11$eligible,
-                                   turnout_mean = mean(uga11$turnout), 
-                                   turnout_sd = sd(uga11$turnout), 
-                                   partyA_mean = mean(uga11$share_museveni, na.rm=T), 
-                                   partyA_sd = sd(uga11$share_museveni, na.rm=T), 
-                                   partyB_mean = mean(uga11$share_besigye, na.rm=T), 
-                                   partyB_sd = sd(uga11$share_besigye, na.rm=T),
-                                   fraud_type = "bbs",
-                                   fraud_incA = fraud_values[row, "fraud_incA"],
-                                   fraud_extA = fraud_values[row, "fraud_extA"],
-                                   n_elections = 1, 
-                                   baseline_A = X, # ? 
-                                   baseline_B = X  # ?
-                                   
-              )
-              
-              fraud_values[row, "euc_distV"] <- 
-                distance(sort(uga11$share_museveni), sort(uga11_syn[[1]]$share_A), method="euclidean")
-              
-              fraud_values[row, "euc_distT"] <- 
-                distance(sort(uga11$turnout), sort(uga11_syn[[1]]$turnout), method="euclidean")
-              
-              if (row %% 1000 == 0)
-                print(str_c("iteration ", row, " out of ", nrow(fraud_values)))
-              
-            }
-            
-            # which fraud values to use
-            uga11_valsV <- fraud_values[which(fraud_values$euc_distV == min(fraud_values$euc_distV)),]
-            uga11_valsT <- fraud_values[which(fraud_values$euc_distT == min(fraud_values$euc_distT)),]
-            
-            
-          #' -------------------------------------------------------------------------
-          ### second: generate synthetic data using these values
-          #' -------------------------------------------------------------------------
+          # generate synthetic data using these values
+          opt_vectorsUGA <- gen_data(n_entities = nrow(uga11),
+                                     eligible = uga11$eligible,
+                                     turnout_mean = median(uga11$turnout), 
+                                     turnout_sd = sd(uga11$turnout[which(uga11$turnout < median(uga11$turnout))]), 
+                                     partyA_mean = mean(uga11$share_museveni), 
+                                     partyA_sd = sd(uga11$share_museveni[which(uga11$share_museveni < median(uga11$share_museveni))]),
+                                     partyB_mean = mean(uga11$share_besigye), 
+                                     partyB_sd = sd(uga11$share_besigye),
+                                    optimize_only = T)
           
-            uga11_syn <- gen_data(n_entities = nrow(uga11),
-                                 eligible = uga11$eligible,
-                                 turnout_mean = mean(uga11$turnout), 
-                                 turnout_sd = sd(uga11$turnout), 
-                                 partyA_mean = mean(uga11$share_museveni), 
-                                 partyA_sd = sd(uga11$share_museveni), 
-                                 partyB_mean = mean(uga11$share_besigye), 
-                                 partyB_sd = sd(uga11$share_besigye),
-                                 fraud_type = "bbs",
-                                 fraud_incA = X, # ?
-                                 fraud_extA = X, # ?
-                                 n_elections = 10)
-            
+          uga11_syn <- gen_data(n_entities = nrow(uga11),
+                               eligible = uga11$eligible,
+                               turnout_mean = median(uga11$turnout), 
+                               turnout_sd = sd(uga11$turnout), 
+                               partyA_mean = mean(uga11$share_museveni), 
+                               partyA_sd = sd(uga11$share_museveni), 
+                               partyB_mean = mean(uga11$share_besigye), 
+                               partyB_sd = sd(uga11$share_besigye),
+                               fraud_type = c("bbs", "switching"),
+                               fraud_incA = 0.35,
+                               fraud_extA = 0.02,
+                               n_elections = 1, 
+                               data_type = "full", 
+                               turnout = opt_results$`optimized vectors`$turnout, 
+                               shareA = opt_results$`optimized vectors`$shareA)
+          
           
       
       #' ------------------------------------------------
@@ -692,6 +671,20 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
+          # find fraud_incA and fraud_extA that resembles data most closely
+          opt_results <- gen_fraudvals(n_entities = nrow(aus08),
+                                       eligible = aus08$eligible,
+                                       turnout_mean = mean(aus08$turnout), 
+                                       turnout_sd = sd(aus08$turnout), 
+                                       partyA_mean = mean(aus08$share_spo), 
+                                       partyA_sd = sd(aus08$share_spo), 
+                                       partyB_mean = mean(aus08$share_ovp), 
+                                       partyB_sd = sd(aus08$share_ovp), 
+                                       shareA = aus08$share_spo, 
+                                       turnout = aus08$turnout, 
+                                       fraud_type = "bbs")
+            
+          # generate synthetic data using these values
           aus08_syn <- gen_data(n_entities = nrow(aus08),
                                 eligible = aus08$eligible,
                                 turnout_mean = mean(aus08$turnout), 
@@ -700,9 +693,15 @@ source("_functions.R")
                                 partyA_sd = sd(aus08$share_spo), 
                                 partyB_mean = mean(aus08$share_ovp), 
                                 partyB_sd = sd(aus08$share_ovp),
-                                fraud_type = "clean",
-                                n_elections = 1
-                                )
+                                fraud_type = "bbs",
+                                fraud_incA = opt_results$valsV[1, "fraud_incA"],
+                                fraud_extA = opt_results$valsV[1, "fraud_extA"],
+                                n_elections = 1, 
+                                data_type = "full", 
+                                turnout = opt_results$`optimized vectors`$turnout, 
+                                shareA = opt_results$`optimized vectors`$shareA)
+            
+            
           
       #' ----------------------------------------------------
       # 2.1.5 Spain, European Parliament election 2019 ------
@@ -726,18 +725,35 @@ source("_functions.R")
         # synthetic
         #' ------------------------
         
+          # find fraud_incA and fraud_extA that resembles data most closely
+          opt_results <- gen_fraudvals(n_entities = nrow(esp19),
+                                       eligible = esp19$eligible,
+                                       turnout_mean = mean(esp19$turnout), 
+                                       turnout_sd = sd(esp19$turnout), 
+                                       partyA_mean = mean(esp19$share_psoe), 
+                                       partyA_sd = sd(esp19$share_psoe), 
+                                       partyB_mean = mean(esp19$share_pp), 
+                                       partyB_sd = sd(esp19$share_pp),
+                                       shareA = esp19$share_psoe, 
+                                       turnout = esp19$turnout, 
+                                       fraud_type = "bbs")
+          
+          # generate synthetic data using these values
           esp19_syn <- gen_data(n_entities = nrow(esp19),
-                                eligible = aus08$eligible,
+                                eligible = esp19$eligible,
                                 turnout_mean = mean(esp19$turnout), 
                                 turnout_sd = sd(esp19$turnout), 
                                 partyA_mean = mean(esp19$share_psoe), 
                                 partyA_sd = sd(esp19$share_psoe), 
                                 partyB_mean = mean(esp19$share_pp), 
                                 partyB_sd = sd(esp19$share_pp),
-                                fraud_type = "clean",
-                                n_elections = 1
-          )
-          
+                                fraud_type = "bbs",
+                                fraud_incA = opt_results$valsV[1, "fraud_incA"],
+                                fraud_extA = opt_results$valsV[1, "fraud_extA"],
+                                n_elections = 1, 
+                                data_type = "full", 
+                                turnout = opt_results$`optimized vectors`$turnout, 
+                                shareA = opt_results$`optimized vectors`$shareA)
           
           
       #' --------------------------------------------
@@ -774,6 +790,20 @@ source("_functions.R")
         # synthetic
         #' ------------------------
      
+          # find fraud_incA and fraud_extA that resembles data most closely
+          opt_results <- gen_fraudvals(n_entities = nrow(fin17),
+                                       eligible = fin17$eligible,
+                                       turnout_mean = mean(fin17$turnout), 
+                                       turnout_sd = sd(fin17$turnout), 
+                                       partyA_mean = mean(fin17$share_kok), 
+                                       partyA_sd = sd(fin17$share_kok), 
+                                       partyB_mean = mean(fin17$share_sdp), 
+                                       partyB_sd = sd(fin17$share_sdp),
+                                       shareA = fin17$share_kok, 
+                                       turnout = fin17$turnout, 
+                                       fraud_type = "bbs")
+          
+          # generate synthetic data using these values
           fin17_syn <- gen_data(n_entities = nrow(fin17),
                                 eligible = fin17$eligible,
                                 turnout_mean = mean(fin17$turnout), 
@@ -782,37 +812,28 @@ source("_functions.R")
                                 partyA_sd = sd(fin17$share_kok), 
                                 partyB_mean = mean(fin17$share_sdp), 
                                 partyB_sd = sd(fin17$share_sdp),
-                                fraud_type = "clean",
-                                n_elections = 1
-          )
+                                fraud_type = "bbs",
+                                fraud_incA = opt_results$valsV[1, "fraud_incA"],
+                                fraud_extA = opt_results$valsV[1, "fraud_extA"],
+                                n_elections = 1, 
+                                data_type = "full", 
+                                turnout = opt_results$`optimized vectors`$turnout, 
+                                shareA = opt_results$`optimized vectors`$shareA)
           
+          
+          
+         
           
           
   #' ---------------------
   # 2.2 comparisons ------
   #' ---------------------     
     
-    #' -------------------------------------
-    # 2.2.1 eligible voters per entity -----
-    #' -------------------------------------
-          
-      h1 <- hist(aus08$eligible, breaks=100)
-      h2 <- hist(aus08_syn[[1]]$eligible, breaks=100)
-      plot(h1, col=rgb(0,0,1,1/4), 
-           xlim = c(0, max(aus08$eligible, rep(seq(501, 1000, 1), 2))), 
-           ylim = c(0, max(h1$counts, h2$counts)), 
-           main = "Empirical vs. simulated distribution of eligible voters")  
-      plot(h2, col=rgb(1,0,0,1/4), 
-           xlim=c(0, max(aus08_syn[[1]]$eligible, rep(seq(501, 1000, 1), 2))), 
-           add=T)
-      
-      
-          
     #' ------------------
-    # 2.2.2 digits ------
+    # 2.2.1 digits ------
     #' ------------------
     
-      plot_digits_all(ven04_syn[[1]]$votes_a, ven04_syn[[1]]$votes_b)
+      plot_digits_all(aus08_syn[[1]]$votes_a, aus08_syn[[1]]$votes_b)
       plot_digits_1last(aus08$SPÖ, aus08_syn)
       
       tikz('digit_comparisons.tex', standAlone = TRUE, width=9, height=6)
@@ -879,7 +900,7 @@ source("_functions.R")
       
       
     #' ---------------------------------------------------------
-    # 2.2.3 bivariate turnout and vote share distribution ------
+    # 2.2.2 bivariate turnout and vote share distribution ------
     #' ---------------------------------------------------------
       
       tikz('scatter.tex', standAlone = T, width=7, height=7)
@@ -905,14 +926,14 @@ source("_functions.R")
         
             # empirical
             image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\% Votes for Winner", xaxt="n")    
-            k <- kde2d(ru12$turnout, ru12$share_putin, n=50)
+            k <- kde2d(uga11$turnout, uga11$share_museveni, n=50)
             image(k, col=r, xlim=c(0,1), ylim=c(0,1), xaxt="n", add=T)
             text(0.23, 0.95, "Russia 2012, Empirical", col="white")
             
             # synthetic
             par(mar = c(2.8, 1.5, 2.8, 2.3))
             image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
-            k <- kde2d(ru12_syn[[1]]$turnout, ru12_syn[[1]]$share_A, n=50)
+            k <- kde2d(uga11_syn$turnout, uga11_syn$shareA, n=50)
             image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
             text(0.23, 0.95, "Russia 2012, Synthetic", col="white")
         
