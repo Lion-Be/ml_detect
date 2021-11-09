@@ -156,8 +156,73 @@ gen_features <- function(votes_a, votes_b, turnout, share_A, share_B) {
 }
 
 
+# --------------------------------------------------------------------------- #
+
+gen_fraudvals <- function(n_entities, eligible, turnout_mean, turnout_sd, 
+                          partyA_mean, partyA_sd, partyB_mean, partyB_sd,
+                          shareA, turnout, fraud_type="bbs") {
+
+  # optimize for turnout, shareA
+  opt_vecs <- gen_data(n_entities = n_entities,
+                       eligible = eligible,
+                       turnout_mean = turnout_mean, 
+                       turnout_sd = turnout_sd, 
+                       partyA_mean = partyA_mean, 
+                       partyA_sd = partyA_sd, 
+                       partyB_mean = partyB_mean, 
+                       partyB_sd = partyB_sd,
+                       optimize_only = T
+  )  
+  
+  # iterate over fraud values
+  fraud_values <- seq(0, 0.4, 0.01)
+  fraud_values <- expand.grid(fraud_values, fraud_values)
+  colnames(fraud_values) <- c("fraud_incA", "fraud_extA")
+  fraud_values$euc_distV <- fraud_values$euc_distT <- NA
+  
+  for (val in 1:nrow(fraud_values)) {
+    
+    data_syn <- gen_data(n_entities = n_entities,
+                          eligible = eligible,
+                          turnout_mean = turnout_mean, 
+                          turnout_sd = turnout_sd, 
+                          partyA_mean = partyA_mean, 
+                          partyA_sd = partyA_sd, 
+                          partyB_mean = partyB_mean, 
+                          partyB_sd = partyB_sd,
+                          fraud_type = fraud_type,
+                          fraud_incA = fraud_values[val, "fraud_incA"],
+                          fraud_extA = fraud_values[val, "fraud_extA"],
+                          n_elections = 1, 
+                          data_type = "full", 
+                          turnout = opt_vecs$turnout, 
+                          shareA = opt_vecs$shareA
+    )
+    
+    fraud_values[val, "euc_distV"] <- 
+      distance(sort(shareA), sort(data_syn$shareA), method="euclidean")
+    
+    fraud_values[val, "euc_distT"] <- 
+      distance(sort(turnout), sort(data_syn$turnout), method="euclidean")
+    
+    if (val %% 1000 == 0)
+      print(str_c("iteration ", val, " out of ", nrow(fraud_values)))
+    
+  }
+  
+  # which fraud values to use
+  valsV <- fraud_values[which.min(fraud_values$euc_distV),]
+  valsT <- fraud_values[which.min(fraud_values$euc_distT),]
+  
+  out <- list(opt_vecs, valsV, valsT)
+  names(out) <- c("optimized vectors", "valsV", "valsT")
+  return(out)
+
+}
+
 
 # --------------------------------------------------------------------------- #
+
 
 plot_digits_all <- function(votes_a, votes_b) {
   
