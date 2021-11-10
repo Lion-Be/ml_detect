@@ -223,6 +223,22 @@ gen_fraudvals <- function(n_entities, eligible, turnout_mean, turnout_sd,
 
 # --------------------------------------------------------------------------- #
 
+gen_cumdata <- function(votes_a, turnout, votes_all) {
+  
+  cum_data <- as.data.frame(cbind(votes_a, turnout))
+  colnames(cum_data) <- c("votes_a", "turnout")
+  cum_data <- cum_data[order(cum_data$turnout),]
+  cum_data$share_cum <- NA
+  votes_a[which(is.na(votes_a))] <- 0
+  cum_data$share_cum <- cumsum(votes_a) / sum(votes_all)
+  
+  return(cum_data)
+}
+
+
+
+# --------------------------------------------------------------------------- #
+
 
 plot_digits_all <- function(votes_a, votes_b) {
   
