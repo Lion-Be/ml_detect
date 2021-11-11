@@ -25,12 +25,10 @@ source("_functions.R")
 
   # define function 
   gen_data <- function(n_entities = 1000, eligible = rep(seq(501, 1000, 1), 2), 
-                       turnout_mean = 0.7, turnout_sd = 0.1, 
-                       partyA_mean = 0.6, partyA_sd = 0.1, partyB_mean = 0.4,    
-                       partyB_sd = 0.1, fraud_type="clean", fraud_incA = 0, 
+                       turnout_emp, shareA_emp, fraud_type="clean", fraud_incA = 0, 
                        fraud_extA = 0, fraud_incB = 0, fraud_extB = 0, 
                        agg_factor = 1, n_elections = 100, data_type = "full",
-                       nuisance = 0.05, turnout = NA, shareA = NA, optimize_only = F) {  
+                       nuisance = 0.05, turnout=NA, shareA=NA, optimize_only = F) {  
     
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
@@ -64,6 +62,12 @@ source("_functions.R")
         # optimize for shareA permutation such that it minimizes
         # the KL divergence between BL2_empirical and BL2_expected
      
+        turnout_mean <- mean(turnout_emp[which(turnout_emp < summary(turnout_emp)[5])])
+        turnout_sd <- sd(turnout_emp[which(turnout_emp < summary(turnout_emp)[5])])
+        
+        partyA_mean <- mean(shareA_emp[which(turnout_emp < summary(turnout_emp)[5])])
+        partyA_sd <-  sd(shareA_emp[which(turnout_emp < summary(turnout_emp)[5])])
+        
         turnout <- rtruncnorm(length(eligible), 0, 1, turnout_mean, turnout_sd)
         shareA <- rtruncnorm(length(eligible), 0, 1, partyA_mean, partyA_sd)
         
@@ -139,11 +143,12 @@ source("_functions.R")
                 # the left part of distribution is left untouched
                 # fraud_ids <- sample(which(turnout > summary(turnout)[2]), size = n_entities * fraud_incA)
                 fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incA)
-                fraud_width <- sqrt(sd(shareA))
+                fraud_width <- sqrt(sd(shareA_emp[which(shareA_emp > summary(shareA_emp)[3])]))
+                # fraud_width <- sqrt(sd(shareA[which(shareA>summary(shareA)[3] & shareA<summary(shareA)[5])]))
                 
                 # ballot box stuffing
                 if (str_detect(paste(fraud_type, collapse = " "), "bbs")) {
-                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA^2, fraud_width))
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA^1.5, fraud_width))
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
@@ -152,7 +157,7 @@ source("_functions.R")
                     
                 # vote stealing
                 if (str_detect(paste(fraud_type, collapse = " "), "stealing")) {
-                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA^2, fraud_width))
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA^1.5, fraud_width))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes 
                   non_voters <- eligible - votes_a - votes_b
@@ -160,7 +165,7 @@ source("_functions.R")
                 }
                 # vote switching
                 if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
-                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA^2, fraud_width))
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incA^1.5, fraud_width))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -222,11 +227,12 @@ source("_functions.R")
                 # the left part of distribution is left untouched
                 # fraud_ids <- sample(which(turnout > summary(turnout)[2]), size = n_entities * fraud_extA)
                 fraud_ids <- sample(1:n_entities, size = n_entities * fraud_extA)
-                fraud_width <- sqrt(sd(shareA))
+                fraud_width <- sqrt(sd(shareA_emp[which(shareA_emp > summary(shareA_emp)[5])]))
+                # fraud_width <- sqrt(sd(shareA[which(shareA>summary(shareA)[5])]))
                 
                 # ballot box stuffing
                 if (str_detect(paste(fraud_type, collapse = " "), "bbs")) {
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA^2, fraud_width))
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA^1.5, fraud_width))
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
@@ -235,7 +241,7 @@ source("_functions.R")
                 
                 # vote stealing
                 if (str_detect(paste(fraud_type, collapse = " "), "stealing")) {
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA^2, fraud_width))
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA^1.5, fraud_width))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes  
                   non_voters <- eligible - votes_a - votes_b
@@ -243,7 +249,7 @@ source("_functions.R")
                 }
                 # vote switching
                 if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA^2, fraud_width))
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extA^1.5, fraud_width))
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
@@ -304,6 +310,7 @@ source("_functions.R")
             
           votes_all <- votes_a + votes_b 
           turnout <- votes_all / eligible
+          turnout[which(turnout > 1)] <- 1
           non_voters <- eligible - votes_all
           
           
@@ -427,7 +434,7 @@ source("_functions.R")
     # when turnout is higher than 1, is set to 1
   
     #' ---------------------------------------------
-    # 2.1.1 Venezuela, recall referendum 2004 ------
+    # 2.1.0 Venezuela, recall referendum 2004 ------
     #' ---------------------------------------------
   
       #' ------------------------
@@ -501,6 +508,49 @@ source("_functions.R")
         
         
         
+      #' -----------------------------------------------
+      # 2.1.1 Russia, parliamentary election 2011 ------
+      #' -----------------------------------------------
+        
+        #' ------------------------
+        # empirical
+        #' ------------------------
+        
+          ru11_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2011_1of2.xls")
+          ru11_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2011_2of2.xls")
+          ru11 <- rbind(ru11_1, ru11_2)
+          ru11$votes_all <- ru11$`Number of valid ballots` + as.numeric(ru11$`Number of invalid ballots`)
+          ru11$turnout <- ru11$votes_all / ru11$`Number of voters included in voters list` 
+          ru11$eligible <- ru11$`Number of voters included in voters list` 
+          ru11$ur <- ru11$`United Russia`
+          ru11$share_ur <- ru11$ur / ru11$`Number of valid ballots`
+          ru11$communist <- ru11$`Communist Party`
+          ru11$share_communist <- ru11$communist / ru11$`Number of valid ballots`
+         
+          # exclude units with an electorate < 100
+          ru11 <- ru11[-which(ru11$`Number of voters included in voters list` < 100),]
+          
+          # exclude units with NAs in share_ur
+          ru11 <- ru11[-which(is.na(ru11$share_ur)),]
+        
+        
+        #' ------------------------
+        # synthetic
+        #' ------------------------
+        
+          # generate synthetic data using these values
+          opt_vectorsRU11 <- gen_data(n_entities = nrow(ru11),
+                                    eligible = ru11$eligible,
+                                    turnout_emp = ru11$turnout, 
+                                    shareA_emp = ru11$share_ur,
+                                    optimize_only = T)
+          
+          
+          
+        
+        
+        
+        
       #' ----------------------------------------------
       # 2.1.2 Russia, presidential election 2012 ------
       #' ----------------------------------------------
@@ -547,14 +597,10 @@ source("_functions.R")
                                        fraud_type = "bbs")
           
           # generate synthetic data using these values
-          opt_vectorsRU <- gen_data(n_entities = nrow(ru12),
-                               eligible = ru12$eligible,
-                               turnout_mean = median(ru12$turnout), 
-                               turnout_sd = sd(ru12$turnout[which(ru12$turnout < median(ru12$turnout))]), 
-                               partyA_mean = median(ru12$share_putin), 
-                               partyA_sd = sd(ru12$share_putin[which(ru12$share_putin < median(ru12$share_putin))]), 
-                               partyB_mean = median(ru12$share_zyuganov), 
-                               partyB_sd = sd(ru12$share_zyuganov[which(ru12$share_zyuganov < median(ru12$share_zyuganov))]),
+          opt_vectorsRU12 <- gen_data(n_entities = nrow(ru12),
+                                    eligible = ru12$eligible,
+                                    turnout_emp = ru12$turnout, 
+                                    shareA_emp = ru12$share_putin,
                                optimize_only = T)
           
           
@@ -633,12 +679,8 @@ source("_functions.R")
           # generate synthetic data using these values
           opt_vectorsUGA <- gen_data(n_entities = nrow(uga11),
                                      eligible = uga11$eligible,
-                                     turnout_mean = median(uga11$turnout), 
-                                     turnout_sd = sd(uga11$turnout[which(uga11$turnout < median(uga11$turnout))]), 
-                                     partyA_mean = mean(uga11$share_museveni), 
-                                     partyA_sd = sd(uga11$share_museveni[which(uga11$share_museveni < median(uga11$share_museveni))]),
-                                     partyB_mean = mean(uga11$share_besigye), 
-                                     partyB_sd = sd(uga11$share_besigye),
+                                     turnout_emp = uga11$turnout, 
+                                     shareA_emp = uga11$share_museveni,
                                     optimize_only = T)
           
           uga11_syn <- gen_data(n_entities = nrow(uga11),
@@ -878,8 +920,8 @@ source("_functions.R")
     # 2.2.1 digits ------
     #' ------------------
     
-      plot_digits_all(aus08_syn[[1]]$votes_a, aus08_syn[[1]]$votes_b)
-      plot_digits_1last(aus08$SPÖ, aus08_syn)
+      plot_digits_all(aus08_syn$votes_a, aus08_syn$votes_b)
+      plot_digits_2last(aus08$SPÖ, aus08_syn)
       
       tikz('digit_comparisons.tex', standAlone = TRUE, width=9, height=6)
       
@@ -889,37 +931,38 @@ source("_functions.R")
             mgp = c(2, 1, 0),
             xpd = F)  
         
-        # Austria 2008
-        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008",
-                          ylab = "Relative Frequency", y_axis = T, y_labels = T, 
-                          x_axis = F, x_labels = F)
+        # Russia 2012
+        plot_digits_2last(ru12$putin, ru12_syn, title = "Russia 2012", ylab = "Relative Frequency",
+                          y_axis = T, x_axis = F, y_labels = T)
         
-        text(3.5, 0.29, "First Digit", cex=1.5)
+        text(3.5, 0.13, "Second Digit", cex=1.5)
         text(2.1, 0.07, "Last Digit", cex=1.5)
         
-        # Spain 2019
-        par(mar = c(0, 1, 1, 0))
-        plot_digits_1last(esp19$PSOE, esp19_syn, title = "Spain 2019",
-                          y_axis = F, x_axis = F)
         
-        # Finland 2017
-        par(mar = c(0, 1, 1, 1))
-        plot_digits_1last(fin17$`KOK Votes cast, total`, fin17_syn, title = "Finland 2017",
-                          y_axis = F, x_axis = F)
+        # Uganda 2011
+        par(mar = c(0, 1, 1, 0))
+        plot_digits_2last(uga11$museveni, uga11_syn, title = "Uganda 2011",
+                          y_axis = F, x_axis = F, x_labels = T)
         
         # Venezuela 2004
-        par(mar = c(2, 2, 1, 0))
-        plot_digits_1last(ven04$rrp_no, ven04_syn, title = "Venezuela 2004", ylab = "Relative Frequency", xlab = "Number",
-                          y_axis = T, y_labels = T, x_axis = T, x_labels = T)
+        par(mar = c(0, 1, 1, 1))
+        plot_digits_2last(ven04$rrp_no, ven04_syn, title = "Venezuela 2004",
+                          y_axis = F, y_labels = F, x_axis = F, x_labels = F)
         
-        # Russia 2012
+        # Austria 2008
+        par(mar = c(2, 2, 1, 0))
+        plot_digits_2last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+                          ylab = "Relative Frequency", y_axis = T, y_labels = T, 
+                          x_axis = T, x_labels = T)
+        
+        # Spain 2019
         par(mar = c(2, 1, 1, 0))
-        plot_digits_1last(ru12$putin, ru12_syn, title = "Russia 2012", xlab = "Number",
+        plot_digits_2last(esp19$PSOE, esp19_syn, title = "Spain 2019", xlab = "Number",
                           y_axis = F, x_axis = T, x_labels = T)
         
-        # Country 6
+        # Finland 2017
         par(mar = c(2, 1, 1, 1))
-        plot_digits_1last(aus08$SPÖ, aus08_syn, title = "Austria 2008", xlab = "Number",
+        plot_digits_2last(fin17$`KOK Votes cast, total`, fin17_syn, title = "Finland 2017", xlab = "Number",
                           y_axis = F, x_axis = T, x_labels = T)
         
         box("outer")
