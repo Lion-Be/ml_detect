@@ -48,22 +48,20 @@ extract_digit <- function(x, digit){
   # commands for digit: 1, 2, "last"
   
   if (digit == 1) 
-    digits <- as.numeric(substr(as.character(x), 1, 1))
+    digits <- as.numeric(str_sub(x, 1, 1))
   
+  if (digit == 2) 
+    digits <- as.numeric(str_sub(x, 2, 2))
   
-  if (digit == 2) {
-    digits <- as.numeric(substr(as.character(x), 2, 2))
-  }
-  
-  if (digit == "last") {
-    digits <- as.numeric(substr(as.character(x),
-                                nchar(as.character(x)),
-                                nchar(as.character(x))))
-  }
-  
+  if (digit == "last") 
+    digits <- as.numeric(str_sub(x, -1, -1))
+
   return(digits)
   
 }
+
+
+
 
 # --------------------------------------------------------------------------- #
 
@@ -106,18 +104,10 @@ rel_freq <- function(x) {
 
 # --------------------------------------------------------------------------- #
 
-gen_features <- function(votes_a, votes_b, turnout, share_A, share_B) {
+gen_features <- function(votes_a, votes_b, turnout, share_A, share_B, eligible) {
   
   data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
-  
-  # 1BL 
-  data_char$bl1_frac1A <- length(which(extract_digit(votes_a, 1) == 1)) / length(votes_a) # partyA, fraction of '1' among first digit
-  data_char$bl1_frac1B <- length(which(extract_digit(votes_b, 1) == 1)) / length(votes_b) # partyB, fraction of '1' among first digit
-  data_char$bl1_meanA <- mean(extract_digit(votes_a, 1)) # party A, mean first digit
-  data_char$bl1_meanB <- mean(extract_digit(votes_b, 1)) # party B, mean first digit
-  data_char$bl1_chi2A <- benford_chi2(votes_a, 1) # party A, chi2 statistic between observed and expected shares in first digit 
-  data_char$bl1_chi2B <- benford_chi2(votes_b, 1) # party B, chi2 statistic between observed and expected shares in first digit 
-  
+
   # 2BL
   data_char$bl2_frac1A <- length(which(extract_digit(votes_a, 2) == 1)) / length(votes_a) # partyA, fraction of '1' among second digit
   data_char$bl2_frac1B <- length(which(extract_digit(votes_b, 2) == 1)) / length(votes_b) # partyB, fraction of '1' among second digit
@@ -135,19 +125,25 @@ gen_features <- function(votes_a, votes_b, turnout, share_A, share_B) {
   data_char$bllast_chi2B <- benford_chi2(votes_b, "last") # party B, chi2 statistic between observed and expected shares in last digit 
   
   # logarithmic turnout rate
+  turnout[which(turnout <= 0)] <- 0.001
+  turnout[which(turnout > 1)] <- 1
   log_turnout_rate <- log(turnout / (eligible - turnout))
-  data_char$logturnout_skew <- skewness(log_turnout_rate)
+  data_char$logturnout_skew <- e1071::skewness(log_turnout_rate)
   data_char$logturnout_kurt <- kurtosis(log_turnout_rate)
   data_char$logturnout_sd <- sd(log_turnout_rate)
   
   # logarithmic vote share rates
+  share_A[which(share_A <= 0)] <- 0.001
+  share_A[which(share_A > 1)] <- 1
   log_shareA_rate <- log(share_A / (eligible - share_A))
-  data_char$logshareA_skew <- skewness(log_shareA_rate)
+  data_char$logshareA_skew <- e1071::skewness(log_shareA_rate)
   data_char$logshareA_kurt <- kurtosis(log_shareA_rate)
   data_char$logshareA_sd <- sd(log_shareA_rate)
   
+  share_B[which(share_B <= 0)] <- 0.001
+  share_B[which(share_B > 1)] <- 1
   log_shareB_rate <- log(share_B / (eligible - share_B))
-  data_char$logshareB_skew <- skewness(log_shareB_rate)
+  data_char$logshareB_skew <- e1071::skewness(log_shareB_rate)
   data_char$logshareB_kurt <- kurtosis(log_shareB_rate)
   data_char$logshareB_sd <- sd(log_shareB_rate)
   
