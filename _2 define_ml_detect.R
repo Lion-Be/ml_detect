@@ -145,8 +145,9 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
     X_emp <- gen_features(votes_a, votes_b, turnout_emp, shareA_emp, shareB_emp, eligible)
     
     # define variables
-    X_train <- model.matrix(fraud ~., train[,c(1, 9:20, 23,28)])[,-1]
-    X_test <- model.matrix(fraud ~., test[,c(1, 9:20, 23,28)])[,-1]
+    X_train <- model.matrix(fraud ~., train[,-c(2:8)])[,-1]
+    X_test <- model.matrix(fraud ~., test[,-c(2:8)])[,-1]
+    
     
     y_train_binary <- as.factor(train$fraud)
     y_test_binary <- as.factor(test$fraud)
