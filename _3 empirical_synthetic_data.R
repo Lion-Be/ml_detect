@@ -17,6 +17,7 @@
     
       ven04 <- read_excel("U:/PhD Electoral Fraud/Data/Venezuela/2004_referendum_revocatorio/referendum.xls",
                           skip = 34)
+      ven04 <- as.data.frame(ven04)
       # rrp_si = number of yes votes
       # rrp_no = number of no votes
       # rep200407 = number of eligible voters  
@@ -121,7 +122,7 @@
     
       ru12_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_1of2.xls")
       ru12_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_2of2.xls")
-      ru12 <- rbind(ru12_1, ru12_2)
+      ru12 <- as.data.frame(rbind(ru12_1, ru12_2))
       ru12$`Number of invalid ballots`[which(ru12$`Number of invalid ballots`=="A")] <- 0
       ru12$votes_all <- ru12$`Number of valid ballots` + as.numeric(ru12$`Number of invalid ballots`)
       ru12$turnout <- ru12$votes_all / ru12$`The number of voters included in voters list` 
@@ -323,6 +324,7 @@
     #' ------------------------
     
       fin17 <- read_excel("U:/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
+      fin17 <- as.data.frame(fin17)
       
       fin17$`Persons entitled to vote` <- as.numeric(fin17$`Persons entitled to vote`)
       fin17$`Persons entitled to vote` <- as.numeric(gsub("[.]", "", fin17$`Persons entitled to vote`))
