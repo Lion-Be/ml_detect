@@ -2,40 +2,40 @@
 #  5. apply ML to empirical cases -------
 #' --------------------------------------
 
-  ml_ru11 <- ml_detect(data = ru11, eligible = ru11$eligible, votes_a = ru11$ur, 
-                       votes_b = ru11$communist, turnout_emp = ru11$turnout, 
-                       shareA_emp = ru11$share_ur, shareB_emp = ru11$share_communist, 
-                       models = "randomForest", parallel = F)
-  
-  ml_ru12 <- ml_detect(data = ru12, eligible = ru12$eligible, votes_a = ru12$putin, 
-                       votes_b = ru12$zyuganov, turnout_emp = ru12$turnout, 
-                       shareA_emp = ru12$share_putin, shareB_emp = ru12$share_zyuganov, 
-                       models = "randomForest", parallel = F)  
-  
   ml_uga11 <- ml_detect(data = uga11, eligible = uga11$eligible, votes_a = uga11$museveni, 
                         votes_b = uga11$besigye, turnout_emp = uga11$turnout, 
                         shareA_emp = uga11$share_museveni, shareB_emp = uga11$share_besigye, 
-                        models = "randomForest", parallel = F)  
+                        models = "randomForest", ml_task="cont", parallel = F)  
   
   ml_ven04 <- ml_detect(data = ven04, eligible = ven04$eligible, votes_a = ven04$rrp_no, 
                         votes_b = ven04$rrp_si, turnout_emp = ven04$turnout, 
                         shareA_emp = ven04$share_no, shareB_emp = ven04$share_si, 
-                        models = "randomForest", parallel = F)  
+                        models = "randomForest",  ml_task="cont", parallel = F)  
   
   ml_aus08 <- ml_detect(data = aus08, eligible = aus08$eligible, votes_a = aus08$SPÖ, 
                           votes_b = aus08$ÖVP, turnout_emp = aus08$turnout, 
                           shareA_emp = aus08$share_spo, shareB_emp = aus08$share_ovp, 
-                          models = "randomForest", parallel = F)
+                          models = "randomForest",  ml_task="cont", parallel = F)
   
   ml_esp19 <- ml_detect(data = esp19, eligible = esp19$eligible, votes_a = esp19$PSOE, 
                         votes_b = esp19$PP, turnout_emp = esp19$turnout, 
                         shareA_emp = esp19$share_psoe, shareB_emp = esp19$share_pp, 
-                        models = "randomForest", parallel = F)
+                        models = "randomForest",  ml_task="cont", parallel = F)
   
   ml_fin17 <- ml_detect(data = fin17, eligible = fin17$eligible, votes_a = fin17$kok_votes, 
                         votes_b = fin17$sdp_votes, turnout_emp = fin17$turnout, 
                         shareA_emp = fin17$share_kok, shareB_emp = fin17$share_sdp, 
-                        models = "randomForest", parallel = F)
+                        models = "randomForest",  ml_task="cont", parallel = F)
+
+  ml_ru11 <- ml_detect(data = ru11, eligible = ru11$eligible, votes_a = ru11$ur, 
+                       votes_b = ru11$communist, turnout_emp = ru11$turnout, 
+                       shareA_emp = ru11$share_ur, shareB_emp = ru11$share_communist, 
+                       models = "randomForest", ml_task="cont", parallel = F)
+  
+  ml_ru12 <- ml_detect(data = ru12, eligible = ru12$eligible, votes_a = ru12$putin, 
+                       votes_b = ru12$zyuganov, turnout_emp = ru12$turnout, 
+                       shareA_emp = ru12$share_putin, shareB_emp = ru12$share_zyuganov, 
+                       models = "randomForest", ml_task="cont", parallel = F)  
   
   
   
@@ -63,15 +63,29 @@
   
   
   # compare simulated data under empirical case to actual empirical values (like on paper)
-  dev.off()
-  par(mfrow=c(1,2))
-  hist(ml_aus08$`simulated elections`$turnout_normdist[which(ml_aus08$`simulated elections`$fraud_type=="clean")], breaks=100, 
-       main="Clean cases", xlab="turnout_normdist")
-  abline(v=aus08_feat$turnout_normdist, col="darkgreen", lwd=3, lty=2)
   
-  hist(ml_aus08$`simulated elections`$turnout_normdist[which(ml_aus08$`simulated elections`$fraud_type!="clean")], breaks=100,
-       main="Fraud cases", xlab="turnout_normdist")
-  abline(v=aus08_feat$turnout_normdist, col="darkgreen", lwd=3, lty=2)
+  
+  for (col in 9:ncol(ml_aus08$`simulated elections`)) {
+    
+    iter <- col - 8
+    
+    par(mfrow=c(1,3))
+    hist(ml_aus08$`simulated elections`[which(ml_aus08$`simulated elections`$fraud_type=="clean"), col], breaks=100, 
+         main="Clean cases", xlab=colnames(ml_aus08$`simulated elections`)[col])
+    abline(v=aus08_feat[,iter], col="darkgreen", lwd=3, lty=2)
+    
+    hist(ml_aus08$`simulated elections`[which(ml_aus08$`simulated elections`$fraud_type!="clean"), col], breaks=100,
+         main="Fraud cases", xlab=colnames(ml_aus08$`simulated elections`)[col])
+    abline(v=aus08_feat[,iter], col="darkgreen", lwd=3, lty=2)
+    
+    plot(ml_aus08$`simulated elections`[,"perc_frauded"], 
+         ml_aus08$`simulated elections`[,col], 
+         xlab="perc_frauded", ylab=colnames(ml_aus08$`simulated elections`)[col])
+    
+  }
+  
+  
+  
   
   ###### diese Art von Plot und die zweite Art von Plot auf dem Papier als Funktion generalisiert definieren
   ###### für alle features erstellen. Evtl. fraud scenarios nicht bei 0, 0.01 beginnen. Sind zu ähnlich. 
