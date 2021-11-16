@@ -8,7 +8,7 @@
                        fraud_type="clean", fraud_incA = 0, fraud_extA = 0, 
                        fraud_incB = 0, fraud_extB = 0, fraud_expo = 1.5,
                        agg_factor = 1, n_elections = 100, data_type = "full",
-                       nuisance = 0.05, turnout_emp=NA, shareA_emp=NA, 
+                       nuisance = 0.01, turnout_emp=NA, shareA_emp=NA, 
                        turnout=NA, shareA=NA, optimize_only = F) {  
     
     # n_entities = number of entities to create data for
@@ -292,6 +292,10 @@
           votes_all <- votes_a + votes_b 
           turnout <- votes_all / eligible
           turnout[which(turnout > 1)] <- 1
+          shareA <- votes_a/votes_all
+          shareA[which(shareA > 1)] <- 1
+          shareB <- votes_b/votes_all
+          shareB[which(shareB > 1)] <- 1
           non_voters <- eligible - votes_all
           
           
@@ -301,14 +305,14 @@
             
             if (agg_factor == 1)  
               data <- as.data.frame(cbind(1:n_entities, eligible, votes_all, votes_a, votes_b, 
-                                          non_voters, turnout, votes_a/votes_all, votes_b/votes_all))
+                                          non_voters, turnout, shareA, shareB))
             
             if (agg_factor > 1) {
               
               n_entities_agg <- n_entities / agg_factor
               agg_id <- sort(rep(1:n_entities_agg, agg_factor))
               data <- as.data.frame(cbind(1:n_entities, agg_id, eligible, votes_all, votes_a, votes_b, 
-                                          non_voters, turnout, votes_a/votes_all, votes_b/votes_all))
+                                          non_voters, turnout, shareA, shareB))
               data <- data %>% 
                 group_by(agg_id) %>% 
                 summarise(agg_id = mean(agg_id), 
@@ -373,7 +377,7 @@
           data_yX <- rbind(data_yX, data_yX[rep(1, (n_elections-1)),])
         
           # add nuisance parameter
-          data_yX[,9:29] <- apply(data_yX[,9:29], MARGIN = 2, rnorm, n = n_elections, sd = nuisance)
+          data_yX[,9:ncol(data_yX)] <- apply(data_yX[,9:ncol(data_yX)], MARGIN = 2, rnorm, n = n_elections, sd = nuisance)
           data_final <- data_yX  
             
     # return list of generated elections      
