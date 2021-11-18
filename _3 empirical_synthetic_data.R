@@ -345,9 +345,10 @@
       fin17$share_kok <- as.numeric(fin17$`KOK Proportion of all votes cast`) / 100
       fin17$share_sdp <- as.numeric(fin17$`SDP Proportion of all votes cast`) / 100
       
-      # exclude units with NAs in share_kok
+      # exclude units with NAs in share_kok or share_sdp
       fin17 <- fin17[-which(is.na(fin17$share_kok)),]
-  
+      fin17 <- fin17[-which(is.na(fin17$share_sdp)),]
+      
   
     #' ------------------------
     # synthetic
