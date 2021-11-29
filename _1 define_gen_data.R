@@ -5,10 +5,11 @@
 
   # define function 
   gen_data <- function(n_entities = 1000, eligible = rep(seq(501, 1000, 1), 2), 
-                       fraud_type="clean", fraud_incA = 0, fraud_extA = 0, 
-                       fraud_incB = 0, fraud_extB = 0, fraud_expo = 1.5,
-                       agg_factor = 1, n_elections = 100, data_type = "full",
-                       nuisance = 0.01, turnout_emp=NA, shareA_emp=NA, 
+                       fraud_type = "clean", fraud_incA = 0, fraud_extA = 0, 
+                       fraud_incB = 0, fraud_extB = 0, fraud_expo = 1.5, 
+                       fraud_round = NA, share_round = NA, agg_factor = 1, n_elections = 100, 
+                       data_type = "full", nuisance = 0.01, 
+                       turnout_emp=NA, shareA_emp=NA, 
                        turnout=NA, shareA=NA, optimize_only = F) {  
     
     # n_entities = number of entities to create data for
@@ -18,6 +19,8 @@
     # fraud_extA = share of n_entities with extreme fraud for partyA
     # fraud_incB = share of n_entities with incremental fraud for partyB
     # fraud_extB = share of n_entities with extreme fraud for partyB
+    # fraud_round = one of A/B. Indicates whether vote shares should be rounded up for partyA/B
+    # share_round = share of entities that should be rounded up
     # agg_factor = aggregation factor, n_entities/agg_factor is the number
     #              of entities data is aggregated towards
     #              no aggregation for agg_factor = 1
@@ -159,7 +162,7 @@
               #' -----------------------------------
               # fraud in favor of partyB
               if (fraud_incB > 0) {
-                #' -----------------------------------
+              #' -----------------------------------
                 
                 fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incB)
                 
@@ -276,27 +279,48 @@
               } # end if (fraud_extB > 0)
               
             } # end if (fraud_extA > 0 | fraud_extB > 0)
+          
+          
+            #' --------------------------------------------------
+            # redefine variables that are affected by fraud
+            #' --------------------------------------------------
+            
+            votes_all <- votes_a + votes_b 
+            turnout <- votes_all / eligible
+            turnout[which(turnout > 1)] <- 1
+            shareA <- votes_a/votes_all
+            shareA[which(shareA > 1)] <- 1
+            shareB <- votes_b/votes_all
+            shareB[which(shareB > 1)] <- 1
+            non_voters <- eligible - votes_all
+            
+            
+            #' -----------------------------------------------------------
+            # rounding votes
+            if (!is.na(fraud_round)) {
+            #' -----------------------------------------------------------
+            
+              # round in favor of partyA
+              if (fraud_round == "A") {  
+                fraud_ids <- sample(which(shareA > 0.5 & shareA < 1 ), length(shareA) * share_round)
+                shareA[fraud_ids] <- ceiling(shareA[fraud_ids] / 0.05) * 0.05 # if it should just be rounded up, then use ceiling instead of round
+              }
+              
+              # redefine affected variables
+              votes_a[fraud_ids] <- as.integer(votes_all[fraud_ids] * shareA[fraud_ids])
+              votes_b <- votes_all - votes_a
+              shareB[fraud_ids] <- 1-shareA[fraud_ids]
+              
+            }
+          
             
           } # end if fraud_type != "clean"
           
           
           
-        #' ------------------------------------------------
-        #  (iii) redefine variables, aggregate data -------
-        #' ------------------------------------------------
-          
-          #' --------------------------------------------------
-          # redefine variables that are affected by fraud
-          #' --------------------------------------------------
-            
-          votes_all <- votes_a + votes_b 
-          turnout <- votes_all / eligible
-          turnout[which(turnout > 1)] <- 1
-          shareA <- votes_a/votes_all
-          shareA[which(shareA > 1)] <- 1
-          shareB <- votes_b/votes_all
-          shareB[which(shareB > 1)] <- 1
-          non_voters <- eligible - votes_all
+        #' ----------------------------
+        #  (iii) aggregate data -------
+        #' ----------------------------
           
           
           #' ------------------------------------
