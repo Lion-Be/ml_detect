@@ -10,9 +10,8 @@
     # 4.1.1 fraud cases ---------
     #' --------------------------
     
-      par(mfrow = c(3, 2),     # 2x2 layout
+      par(mfrow = c(2, 3),     # 2x2 layout
           oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
-          mar = c(2.8, 2.8, 2.8, 1), # space for one row of text at ticks and to separate plots
           mgp = c(2, 1, 0),
           xpd = NA)  
       
@@ -25,69 +24,60 @@
       x$y <- seq(0,10,1)
       x$z <- matrix(rep(0,100), nrow=10, ncol=10)
       
-      #' -----------------------
-      # Uganda 2011
-      #' -----------------------
+     
+      # Uganda 2011 empirical
+      par(mar = c(1.5, 1.4, 2.5, 1))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="Winner's vote share", xaxt="n", cex.lab=1.1, cex.axis=1.1)    
+      k <- kde2d(uga11$turnout, uga11$share_museveni, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), xaxt="n", add=T)
+      text(0.3, 1.05, "Uganda 2011, Empirical", col="black", font=1, cex=1.2)
       
-        # empirical
-        image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\% Votes for Winner", xaxt="n")    
-        k <- kde2d(uga11$turnout, uga11$share_museveni, n=50)
-        image(k, col=r, xlim=c(0,1), ylim=c(0,1), xaxt="n", add=T)
-        text(0.23, 0.95, "Uganda 2011, Empirical", col="white")
-        
-        # synthetic
-        par(mar = c(2.8, 1.5, 2.8, 2.3))
-        image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
-        k <- kde2d(uga11_syn$turnout, uga11_syn$shareA, n=50)
-        image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
-        text(0.23, 0.95, "Uganda 2011, Synthetic", col="white")
+      # Russia 2011 empirical
+      par(mar = c(1.5, 1.2, 2.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")
+      k <- kde2d(ru11$turnout, ru11$share_ur, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
+      text(0.3, 1.05, "Russia 2011, Empirical", col="black", font=1, cex=1.2)
+      
+      # Russia 2012 empirical
+      par(mar = c(1.5, 1.2, 2.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
+      k <- kde2d(ru12$turnout, ru12$share_putin, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
+      text(0.3, 1.05, "Russia 2012, Empirical", col="black", font=1, cex=1.2)
       
         
-      #' -----------------------
-      # Russia 2011
-      #' -----------------------
+     # Uganda 2011 synthetic
+      par(mar = c(2.5, 1.4, 1.5, 1))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="Winner's vote share", xlab="Turnout", cex.lab=1.1, cex.axis=1.1)    
+      k <- kde2d(uga11_syn$turnout, uga11_syn$shareA, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
+      text(0.49, 1.05, expression("Uganda 2011: "~f[i]~"=0.49,"~f[e]~"=0.02,"~c~"=1.5"), col="black", font=1, cex=1.2)
       
-        # empirical
-        par(mar = c(2.8, 2.8, 1, 1))
-        image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\%Votes for Winner", xlab="\\%Turnout")    
-        k <- kde2d(ru11$turnout, ru11$share_ur, n=50)
-        image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
-        text(0.23, 0.95, "Russia 2011, Empirical", col="white")
-        
-        # synthetic
-        par(mar = c(2.8, 1.5, 1, 2.3))
-        image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="\\%Turnout")    
-        k <- kde2d(ru11_syn$turnout, ru11_syn$shareA, n=50)
-        image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
-        text(0.23, 0.95, "Russia 2011, Synthetic", col="white")
-        
-        
-      #' -----------------------
-      # Russia 2012
-      #' -----------------------
-        
-        # empirical
-        par(mar = c(2.8, 2.8, 1, 1))
-        image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\%Votes for Winner", xlab="\\%Turnout")    
-        k <- kde2d(ru12$turnout, ru12$share_putin, n=50)
-        image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
-        text(0.23, 0.95, "Russia 2012, Empirical", col="white")
-        
-        # synthetic
-        par(mar = c(2.8, 1.5, 1, 2.3))
-        image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="\\%Turnout")    
-        k <- kde2d(ru12_syn$turnout, ru12_syn$shareA, n=50)
-        image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
-        text(0.23, 0.95, "Russia 2012, Synthetic", col="white")
+      # Russia 2011 synthetic
+      par(mar = c(2.5, 1.2, 1.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="Turnout", cex.lab=1.1, cex.axis=1.1)
+      k <- kde2d(ru11_syn$turnout, ru11_syn$shareA, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
+      text(0.49, 1.05, expression("Russia 2011: "~f[i]~"=0.32,"~f[e]~"=0.10,"~c~"=1.5"), col="black", font=1, cex=1.2)
+      
+      # Russia 2012 synthetic
+      par(mar = c(2.5, 1.2, 1.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="Turnout", cex.lab=1.1, cex.axis=1.1)    
+      k <- kde2d(ru12_syn$turnout, ru12_syn$shareA, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
+      text(0.49, 1.05, expression("Russia 2012: "~f[i]~"=0.35,"~f[e]~"=0.09,"~c~"=1.5"), col="black", font=1, cex=1.2)
+      
+     
 
       
     #' --------------------------
     # 4.1.2 clean cases ---------
     #' --------------------------
       
-      par(mfrow = c(3, 2),     # 2x2 layout
+      
+      par(mfrow = c(2, 3),     # 2x2 layout
           oma = c(2, 2, 0, 0), # two rows of text at the outer left and bottom margin
-          mar = c(2.8, 2.8, 2.8, 1), # space for one row of text at ticks and to separate plots
           mgp = c(2, 1, 0),
           xpd = NA)  
       
@@ -100,67 +90,62 @@
       x$y <- seq(0,10,1)
       x$z <- matrix(rep(0,100), nrow=10, ncol=10)
       
-      #' -----------------------
-      # Austria 2008
-      #' -----------------------
       
-      # empirical
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\% Votes for Winner", xaxt="n")    
+      # Austria 2008, Empirical
+      par(mar = c(1.5, 1.4, 2.5, 1))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="Winner's vote share", xaxt="n", cex.lab=1.1, cex.axis=1.1)    
       k <- kde2d(aus08$turnout, aus08$share_spo, n=50)
       image(k, col=r, xlim=c(0,1), ylim=c(0,1), xaxt="n", add=T)
-      text(0.23, 0.95, "Austria 2008, Empirical", col="white")
+      text(0.3, 1.05, "Austria 2008, Empirical", col="black", font=1, cex=1.2)
       
-      # synthetic
-      par(mar = c(2.8, 1.5, 2.8, 2.3))
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
-      k <- kde2d(aus08_syn$turnout, aus08_syn$shareA, n=50)
-      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
-      text(0.23, 0.95, "Austria 2008, Synthetic", col="white")
-      
-      
-      #' -----------------------
-      # Spain 2019
-      #' -----------------------
-      
-      # empirical
-      par(mar = c(2.8, 2.8, 1, 1))
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\%Votes for Winner", xlab="\\%Turnout")    
+      # Spain 2019, Empirical
+      par(mar = c(1.5, 1.2, 2.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")
       k <- kde2d(esp19$turnout, esp19$share_psoe, n=50)
       image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
-      text(0.23, 0.95, "Spain 2019, Empirical", col="white")
+      text(0.3, 1.05, "Spain 2019, Empirical", col="black", font=1, cex=1.2)
       
-      # synthetic
-      par(mar = c(2.8, 1.5, 1, 2.3))
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="\\%Turnout")    
-      k <- kde2d(esp19_syn$turnout, esp19_syn$shareA, n=50)
-      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
-      text(0.23, 0.95, "Spain 2019, Synthetic", col="white")
-      
-      
-      #' -----------------------
-      # Finland 2017
-      #' -----------------------
-      
-      # empirical
-      par(mar = c(2.8, 2.8, 1, 1))
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="\\%Votes for Winner", xlab="\\%Turnout")    
+      # Finland 2017, Empirical
+      par(mar = c(1.5, 1.2, 2.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n")    
       k <- kde2d(fin17$turnout, fin17$share_kok, n=50)
       image(k, col=r, xlim=c(0,1), ylim=c(0,1), add=T)
-      text(0.23, 0.95, "Finland 2017, Empirical", col="white")
+      text(0.3, 1.05, "Finland 2017, Empirical", col="black", font=1, cex=1.2)
       
-      # synthetic
-      par(mar = c(2.8, 1.5, 1, 2.3))
-      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="\\%Turnout")    
+      
+      # Austria 2008, Synthetic
+      par(mar = c(2.5, 1.4, 1.5, 1))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), ylab="Winner's vote share", xlab="Turnout", cex.lab=1.1, cex.axis=1.1)    
+      k <- kde2d(aus08_syn$turnout, aus08_syn$shareA, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", xaxt="n", add=T)
+      text(0.32, 1.05, expression("Austria 2008: "~f[i]~"=0,"~f[e]~"=0"), col="black", font=1, cex=1.2)
+      
+      # Spain 2019, Synthetic
+      par(mar = c(2.5, 1.2, 1.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="Turnout", cex.lab=1.1, cex.axis=1.1)
+      k <- kde2d(esp19_syn$turnout, esp19_syn$shareA, n=50)
+      image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
+      text(0.32, 1.05, expression("Spain 2019: "~f[i]~"=0,"~f[e]~"=0"), col="black", font=1, cex=1.2)
+      
+      # Finland 2017, Synthetic
+      par(mar = c(2.5, 1.2, 1.5, 1.2))
+      image(x, col=r[1], xlim=c(0,1), ylim=c(0,1), yaxt="n", xlab="Turnout", cex.lab=1.1, cex.axis=1.1)    
       k <- kde2d(fin17_syn$turnout, fin17_syn$shareA, n=50)
       image(k, col=r, xlim=c(0,1), ylim=c(0,1), yaxt="n", add=T)
-      text(0.23, 0.95, "Finland 2017, Synthetic", col="white")
+      text(0.32, 1.05, expression("Finland 2017: "~f[i]~"=0,"~f[e]~"=0"), col="black", font=1, cex=1.2)
+      
+      
+      
+      
+      
+      
+      
       
     
   #' ----------------------------------------
   # 4.2. plot univariate turnout curves -----
   #' ----------------------------------------
   
-    dev.off()
     par(mfrow = c(2, 3))
     
     # Russia 2012
@@ -227,8 +212,8 @@
     par(mfrow = c(2, 3))
     
     # Russia 2012
-    d_ru12 <- density(ru12$share_putin, bw=0.01)
-    d_ru12_syn <- density(ru12_syn$shareA, bw=0.01)
+    d_ru12 <- density(ru12$share_putin, bw=0.02)
+    d_ru12_syn <- density(ru12_syn$shareA, bw=0.02)
     
     plot(d_ru12, col = "blue", lwd=1.5, main = "Russia 2012", xlab = "% Winner",
          xlim = c(min(d_ru12$x, d_ru12_syn$x), c(max(d_ru12$x, d_ru12_syn$x))),  
@@ -236,8 +221,8 @@
     lines(d_ru12_syn, col = "red", lwd=1.5)
     
     # Uganda 2011
-    d_uga11 <- density(uga11$share_museveni, bw=0.01)
-    d_uga11_syn <- density(uga11_syn$shareA, bw=0.01)
+    d_uga11 <- density(uga11$share_museveni, bw=0.02)
+    d_uga11_syn <- density(uga11_syn$shareA, bw=0.02)
     
     plot(d_uga11, col = "blue", lwd=1.5, main = "Uganda 2011", xlab = "% Winner", 
          xlim = c(min(d_uga11$x, d_uga11_syn$x), c(max(d_uga11$x, d_uga11_syn$x))),  
@@ -245,8 +230,8 @@
     lines(d_uga11_syn, col = "red", lwd=1.5)
     
     # Venezuela 2004
-    d_ven04 <- density(ven04$share_no, bw=0.01)
-    d_ven04_syn <- density(ven04_syn$shareA, bw=0.01)
+    d_ven04 <- density(ven04$share_no, bw=0.03)
+    d_ven04_syn <- density(ven04_syn$shareA, bw=0.03)
     
     plot(d_ven04, col = "blue", lwd=1.5, main = "Venezuela 2004", xlab = "% Winner", 
          xlim = c(min(d_ven04$x, d_ven04_syn$x), c(max(d_ven04$x, d_ven04_syn$x))),  
@@ -254,8 +239,8 @@
     lines(d_ven04_syn, col = "red", lwd=1.5)
     
     # Austria 2008
-    d_aus08 <- density(aus08$share_spo, bw=0.01)
-    d_aus08_syn <- density(aus08_syn$shareA, bw=0.01)
+    d_aus08 <- density(aus08$share_spo, bw=0.02)
+    d_aus08_syn <- density(aus08_syn$shareA, bw=0.02)
     
     plot(d_aus08, col = "blue", lwd=1.5, main = "Austria 2008", xlab = "% Winner", 
          xlim = c(min(d_aus08$x, d_aus08_syn$x), c(max(d_aus08$x, d_aus08_syn$x))),  
@@ -263,8 +248,8 @@
     lines(d_aus08_syn, col = "red", lwd=1.5)
     
     # Spain 2019
-    d_esp19 <- density(esp19$share_psoe, bw=0.01)
-    d_esp19_syn <- density(esp19_syn$shareA, bw=0.01)
+    d_esp19 <- density(esp19$share_psoe, bw=0.04)
+    d_esp19_syn <- density(esp19_syn$shareA, bw=0.04)
     
     plot(d_esp19, col = "blue", lwd=1.5, main = "Spain 2019", xlab = "% Winner", 
          xlim = c(min(d_esp19$x, d_esp19_syn$x), c(max(d_esp19$x, d_esp19_syn$x))),  
@@ -272,8 +257,8 @@
     lines(d_esp19_syn, col = "red", lwd=1.5)
     
     # Finland 2017
-    d_fin17 <- density(fin17$share_kok, bw=0.01)
-    d_fin17_syn <- density(fin17_syn$shareA, bw=0.01)
+    d_fin17 <- density(fin17$share_kok, bw=0.02)
+    d_fin17_syn <- density(fin17_syn$shareA, bw=0.02)
     
     plot(d_fin17, col = "blue", lwd=1.5, main = "Finland 2017", xlab = "% Winner", 
          xlim = c(min(d_fin17$x, d_fin17_syn$x), c(max(d_fin17$x, d_fin17_syn$x))),  
