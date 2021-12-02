@@ -322,6 +322,19 @@
         #  (iii) aggregate data -------
         #' ----------------------------
           
+          #' --------------------------------------------------
+          # redefine variables that are affected by fraud
+          #' --------------------------------------------------
+          
+            votes_all <- votes_a + votes_b 
+            turnout <- votes_all / eligible
+            turnout[which(turnout > 1)] <- 1
+            shareA <- votes_a/votes_all
+            shareA[which(shareA > 1)] <- 1
+            shareB <- votes_b/votes_all
+            shareB[which(shareB > 1)] <- 1
+            non_voters <- eligible - votes_all
+          
           
           #' ------------------------------------
           # construct (aggregated) dataset
