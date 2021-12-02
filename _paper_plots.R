@@ -39,7 +39,7 @@
   
   tikz('digits.tex', standAlone = TRUE, width=12, height=6)
 
-    par(mfrow=c(1,2),
+    par(mfrow=c(1,3),
       mar = c(4.5, 4.5, 0, 1))
 
 
@@ -51,15 +51,15 @@
             lwd=2, lty=2, col="darkgrey")
       
       lines(c(table(extract_digit(esp19$PSOE, 2))/length(extract_digit(esp19$PSOE, 2))), type="o",
-            lwd=2, lty=2, col="darkgreen")
+            lwd=2, lty=2, col="blue4")
       
       lines(c(table(extract_digit(fin17$kok_votes, 2))/length(extract_digit(fin17$kok_votes, 2))), type="o",
-            lwd=2, lty=2, col="blue4")
+            lwd=2, lty=2, col="darkgreen")
       
       lines(c(table(extract_digit(ru11$ur, 2))/length(extract_digit(ru11$ur, 2))), type="o",
             lwd=2, lty=2, col="orange")
       
-      lines(c(table(extract_digit(ru12$putin, 2))/length(extract_digit(ru12$putin, 2))), type="o",
+      lines(c(table(extract_digit(ru12$zyuganov, 2))/length(extract_digit(ru12$zyuganov, 2))), type="o",
             lwd=2, lty=2, col="brown1")
       
       lines(c(table(extract_digit(ven04$rrp_no, 2))/length(extract_digit(ven04$rrp_no, 2))), type="o",
@@ -68,9 +68,53 @@
       lines(c(table(extract_digit(uga11$museveni, 2))/length(extract_digit(uga11$museveni, 2))), type="o",
             lwd=2, lty=2, col="darkviolet")
       
+      text(9, 0.14, labels="A", cex=3, font=2)
+      
       par(mar = c(4.5, 2.8, 0, 1))
       
-    #' Figure 1b: empirical second significant digits and synethtic for different degrees of fraud
+      
+      
+      
+      #' Figure 1b: empirical second significant digits and synthtic clean digits
+      #' Finland 2017
+      
+        plot(benford_expected(2), ylab="Relative Frequency", xlab="Digit", 
+             main = "", frame = FALSE, type = "l", xaxt = "n", lwd=4, ylim=c(0.05, 0.15), cex.lab=2, cex.axis=1.55)
+        axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"), cex.lab=2, cex.axis=1.55)
+        
+       
+        
+        for (iter in 1:10) {
+          
+          opt_vectorsFIN <- gen_data(n_entities = nrow(fin17),
+                                     eligible = fin17$eligible,
+                                     turnout_emp = fin17$turnout, 
+                                     shareA_emp = fin17$share_kok,
+                                     optimize_only = T)
+          
+          fin17_syn <- gen_data(n_entities = nrow(fin17),
+                                eligible = fin17$eligible,
+                                fraud_type = "clean",
+                                fraud_incA = 0,
+                                fraud_extA = 0,
+                                n_elections = 1, 
+                                data_type = "full", 
+                                turnout = opt_vectorsFIN$turnout, 
+                                shareA = opt_vectorsFIN$shareA)
+          
+          lines(c(table(extract_digit(fin17_syn$votes_a, 2))/length(extract_digit(fin17_syn$votes_a, 2))), type="o",
+                lwd=2, lty=2, col="darkblue")
+          
+        }
+        
+        # empirical data
+        lines(c(table(extract_digit(fin17$kok_votes, 2))/length(extract_digit(fin17$kok_votes, 2))), type="o",
+              lwd=2, lty=1, col="brown1")
+      
+        text(9, 0.14, labels="B", cex=3, font=2)
+      
+      
+    #' Figure 1c: empirical second significant digits and synthtic for different degrees of fraud
     #' Russia 2012
     
       plot(benford_expected(2), ylab="Relative Frequency", xlab="Digit", 
@@ -101,6 +145,15 @@
         
       }
       
+      for (iter in 1:10) {
+      
+      # find turnout, shareA vectors that resemble BL most closely
+      opt_vectorsRU12 <- gen_data(n_entities = nrow(ru12),
+                                  eligible = ru12$eligible,
+                                  turnout_emp = ru12$turnout, 
+                                  shareA_emp = ru12$share_putin,
+                                  optimize_only = T)
+        
       # clean synthetic data
       ru12_syn <- gen_data(n_entities = nrow(ru12),
                            eligible = ru12$eligible,
@@ -117,10 +170,13 @@
       lines(c(table(extract_digit(ru12_syn$votes_b, 2))/length(extract_digit(ru12_syn$votes_b, 2))), type="o",
             lwd=2, lty=2, col="darkblue")
       
+      }
       
       # empirical data
       lines(c(table(extract_digit(ru12$zyuganov, 2))/length(extract_digit(ru12$zyuganov, 2))), type="o",
-            lwd=2, lty=2, col="brown1")
+            lwd=2, lty=1, col="brown1")
+      
+      text(9, 0.14, labels="C", cex=3, font=2)
       
       box("outer")
       
@@ -134,9 +190,9 @@
       par(mfrow=c(1,1))
       plot(NA, xlim=c(1,10), ylim=c(1,10), axes=F, xlab="")
       legend(5,7, legend=c("Second Digit, Theory", "Finland 2017, Empirical", "Spain 2019, Empirical", "Austria 2008, Empirical", "Russia 2011, Empirical", 
-                           "Russia 2012, Empirical", "Venezuela 2004, Empirical", "Uganda 2011, Empirical", NA, "Russia 2012, Synthetic (Clean)", "Russia 2012, Synthetic (Fraud)", "Russia 2012, Empirical"),
-             col=c("black", "blue4", "darkgreen", "darkgray", "brown1", "orange", "darkred", "darkviolet", NA, "darkblue", "lightgrey", "brown1"),
-             lty=c(1,rep(2,7), NA, rep(2, 3)), lwd=c(4, rep(2,7), NA, rep(2,3)), pch=c(NA, rep(1,7), NA, rep(1,3)), cex=1, bty = "n")
+                           "Russia 2012, Empirical", "Venezuela 2004, Empirical", "Uganda 2011, Empirical", NA, "Finland 2017, Synthetic (Clean)", "Finland 2017, Empirical", NA, "Russia 2012, Synthetic (Clean)", "Russia 2012, Synthetic (Fraud)", "Russia 2012, Empirical"),
+             col=c("black", "darkgreen", "blue4", "darkgray", "brown1", "orange", "darkred", "darkviolet", NA, "darkblue", "brown1", NA, "darkblue", "lightgrey", "brown1"),
+             lty=c(1,rep(2,7), NA, 2, 1, NA, rep(2, 2), 1), lwd=c(4, rep(2,7), NA, 2, 2, NA, rep(2,3)), pch=c(NA, rep(1,7), NA, 1, 1, NA, rep(1,3)), cex=1, bty = "n")
       
     dev.off()
     tools::texi2dvi('digits_legend.tex',pdf=T)
