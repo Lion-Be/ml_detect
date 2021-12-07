@@ -197,6 +197,9 @@ gen_features <- function(votes_a, votes_b, turnout, share_A, share_B, eligible) 
   data_char$turn_shareA_98 <- length(which(turnout > 0.98 & share_A > 0.98)) / length(turnout)
   data_char$turn_shareA_99 <- length(which(turnout > 0.99 & share_A > 0.99)) / length(turnout)
   
+  # share of entities with multiple of 5 vote shares
+  data_char$coarse_frac <- length(share_A[which((share_A/0.05) %% 1 == 0)]) / length(share_A)
+  
   return(data_char)
   
 }
