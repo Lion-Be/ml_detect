@@ -6,35 +6,7 @@
  # numerical characteristics of electoral returns
  #' -----------------------------------------------
 
-   #' Figure 1a: second significant digits for different aggregation levels, 
-   #' Spain 2019
-
-    
-      # # second aggregation level: municipo (código)
-      # esp19_2 <- esp19 %>% 
-      #   group_by(`Código de Municipio`) %>% 
-      #   summarise(eligible = sum(eligible),
-      #             PSOE = sum(PSOE), 
-      #             PP = sum(PP))
-      # 
-      # # expected 2BL
-      # plot(benford_expected(2), ylab="Relative Frequency", xlab="Digit", 
-      #      labels=F, type="l", lwd=4, ylim=c(0.05, 0.15), main="")
-      # axis(1, at=1:10, labels=c("0", "1", "2", "3", "4", "5", "6", "7", "8", "9"))
-      # axis(2, at=seq(0.05, 0.15, 0.01))
-      # 
-      # # level: municipo (nombre)
-      # lines(c(table(extract_digit(esp19$PSOE, 2))/length(extract_digit(esp19$PSOE, 2))), type="o",
-      #       lwd=2, col="darkblue")
-      # lines(c(table(extract_digit(esp19$PP, 2))/length(extract_digit(esp19$PP, 2))), type="o",
-      #       lwd=2, col="lightblue")
-      # 
-      # lines(c(table(extract_digit(esp19_2$PSOE, 2))/length(extract_digit(esp19_2$PSOE, 2))), type="o",
-      #       lwd=2, lty=2, col="darkblue")
-      # lines(c(table(extract_digit(esp19_2$PP, 2))/length(extract_digit(esp19_2$PP, 2))), type="o",
-      #       lwd=2, lty=2, col="lightblue")
-
-      
+   
     #' Figure 1a: second digits at lowest level across all elections (winner)
   
   tikz('digits.tex', standAlone = TRUE, width=12, height=6)
