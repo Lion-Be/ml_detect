@@ -15,7 +15,7 @@
   ml_aus08 <- ml_detect(data = aus08, eligible = aus08$eligible, votes_a = aus08$SPÖ, 
                           votes_b = aus08$ÖVP, turnout_emp = aus08$turnout, 
                           shareA_emp = aus08$share_spo, shareB_emp = aus08$share_ovp, 
-                          models = "randomForest",  ml_task="cont", parallel = F)
+                          models = c("randomForest"),  ml_task=c("cont"), parallel = F)
   
   ml_esp19 <- ml_detect(data = esp19, eligible = esp19$eligible, votes_a = esp19$PSOE, 
                         votes_b = esp19$PP, turnout_emp = esp19$turnout, 
@@ -30,7 +30,7 @@
   ml_ru11 <- ml_detect(data = ru11, eligible = ru11$eligible, votes_a = ru11$ur, 
                        votes_b = ru11$communist, turnout_emp = ru11$turnout, 
                        shareA_emp = ru11$share_ur, shareB_emp = ru11$share_communist, 
-                       models = "randomForest", ml_task="cont", parallel = F)
+                       models = c("kNN", "regul_reg", "randomForest"), ml_task=c("binary", "cat", "cont"), parallel = F)
   
   ml_ru12 <- ml_detect(data = ru12, eligible = ru12$eligible, votes_a = ru12$putin, 
                        votes_b = ru12$zyuganov, turnout_emp = ru12$turnout, 
