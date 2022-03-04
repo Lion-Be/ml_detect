@@ -268,15 +268,22 @@
       # generate synthetic data using these values
       aus08_syn <- gen_data(n_entities = nrow(aus08),
                             eligible = aus08$eligible,
-                            fraud_type = "clean",
-                            fraud_incA = 0,
-                            fraud_extA = 0,
+                            fraud_type = "bbs",
+                            fraud_incA = 0.6,
+                            fraud_extA = 0.2,
+                            fraud_incB = 0, 
+                            fraud_extB = 0, 
+                            fraud_roundA = T, 
+                            share_roundA = 0.03, 
+                            fraud_roundB = T, 
+                            share_roundB = 0.03, 
                             n_elections = 1, 
                             data_type = "full", 
+                            shareA_emp = aus08$share_spo,
                             turnout = opt_vectorsAUS$turnout, 
                             shareA = opt_vectorsAUS$shareA)
       
-
+      
   #' --------------------------------------------------
   # 3.5 Spain, European Parliament election 2019 ------
   #' --------------------------------------------------
