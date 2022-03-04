@@ -7,7 +7,9 @@
   gen_data <- function(n_entities = 1000, eligible = rep(seq(501, 1000, 1), 2), 
                        fraud_type = "clean", fraud_incA = 0, fraud_extA = 0, 
                        fraud_incB = 0, fraud_extB = 0, fraud_expo = 1.5, 
-                       fraud_round = NA, share_round = NA, agg_factor = 1, n_elections = 100, 
+                       fraud_roundA = F, share_roundA = NA, 
+                       fraud_roundB = F, share_roundB = NA, 
+                       agg_factor = 1, n_elections = 100, 
                        data_type = "full", nuisance = 0.01, 
                        turnout_emp=NA, shareA_emp=NA, 
                        turnout=NA, shareA=NA, optimize_only = F) {  
@@ -19,7 +21,7 @@
     # fraud_extA = share of n_entities with extreme fraud for partyA
     # fraud_incB = share of n_entities with incremental fraud for partyB
     # fraud_extB = share of n_entities with extreme fraud for partyB
-    # fraud_round = one of A/B. Indicates whether vote shares should be rounded up for partyA/B
+    # fraud_round = T/F, indicates whether vote shares should be rounded up for partyA/B
     # share_round = share of entities that should be rounded up
     # agg_factor = aggregation factor, n_entities/agg_factor is the number
     #              of entities data is aggregated towards
@@ -32,7 +34,8 @@
     # turnout = turnout vector that was optimized for 
     # shareA = shareA vector that was optimized for
     # optimize_only = should the function only be executed to construct turnout/shareA vector?
-   
+    shareB_emp <- 1 - shareA_emp
+    
     
       #' -------------------------------------------
       #  (i) optimize for shareA permutation -------
@@ -78,7 +81,6 @@
         } # end optimization
         
         print("generating synthetic data: optimization done.")
-        ### could also minimize a multidimensional KL divergence? second and last digits?
         
         used_perm <- which.min(KL_div)
         shareA <- shareA_shuffled[, used_perm] 
@@ -106,7 +108,7 @@
           votes_b <- round(votes_all - votes_a, digits = 0)
           non_voters <- eligible - votes_all
       
-          n_frauded <- 0
+          n_fraudedA <- n_fraudedB <- 0
           
         #'----------------------------
         # manipulated data
@@ -136,7 +138,7 @@
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedA <- n_fraudedA + sum(moved_votes)
                 }           
                     
                 # vote stealing
@@ -145,7 +147,7 @@
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes 
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedA <- n_fraudedA + sum(moved_votes)
                 }
                 # vote switching
                 if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
@@ -153,7 +155,7 @@
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedA <- n_fraudedA + sum(moved_votes)
                 }
                 
               } # end if (fraud_incA > 0)
@@ -164,32 +166,37 @@
               if (fraud_incB > 0) {
               #' -----------------------------------
                 
+                # only sample units with larger turnout values than median
+                # the left part of distribution is left untouched
+                # fraud_ids <- sample(which(turnout > summary(turnout)[2]), size = n_entities * fraud_incA)
                 fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incB)
+                fraud_width <- sqrt(sd(shareB_emp[which(shareB_emp > summary(shareB_emp)[3])]))
+                # fraud_width <- sqrt(sd(shareA[which(shareA>summary(shareA)[3] & shareA<summary(shareA)[5])]))
                 
                 # ballot box stuffing
-                if (fraud_type == "bbs") {
-                  share_moved <- abs(rnorm(length(fraud_ids), 0, sd(non_voters/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "bbs")) {
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incB^fraud_expo, fraud_width))
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedB <- n_fraudedB + sum(moved_votes)
                 }           
                 
                 # vote stealing
-                if (fraud_type == "stealing") {
-                  share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "stealing")) {
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incB^fraud_expo, fraud_width))
                   moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes 
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedB <- n_fraudedB + sum(moved_votes)
                 }
                 # vote switching
-                if (fraud_type == "switching") { 
-                  share_moved <- abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
+                  share_moved <- abs(rnorm(length(fraud_ids), fraud_incB^fraud_expo, fraud_width))
                   moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
                   votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedB <- n_fraudedB + sum(moved_votes)
                 }
                 
               } # end if (fraud_incB > 0)
@@ -220,7 +227,7 @@
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedA <- n_fraudedA + sum(moved_votes)
                 }           
                 
                 # vote stealing
@@ -229,7 +236,7 @@
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes  
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedA <- n_fraudedA + sum(moved_votes)
                 }
                 # vote switching
                 if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
@@ -237,7 +244,7 @@
                   moved_votes <- as.integer(votes_b[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] - moved_votes
                   votes_a[fraud_ids] <- votes_a[fraud_ids] + moved_votes
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedA <- n_fraudedA + sum(moved_votes)
                 }
                 
               } # end if (fraud_incA > 0)
@@ -248,32 +255,37 @@
               if (fraud_extB > 0) {
               #' -----------------------------------
                 
-                fraud_ids <- sample(1:n_entities, size = n_entities * fraud_incB)
+                # only sample units with larger turnout values than median
+                # the left part of distribution is left untouched
+                # fraud_ids <- sample(which(turnout > summary(turnout)[2]), size = n_entities * fraud_extA)
+                fraud_ids <- sample(1:n_entities, size = n_entities * fraud_extB)
+                fraud_width <- sqrt(sd(shareB_emp[which(shareB_emp > summary(shareB_emp)[5])]))
+                # fraud_width <- sqrt(sd(shareA[which(shareA>summary(shareA)[5])]))
                 
                 # ballot box stuffing
-                if (fraud_type == "bbs") {
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(non_voters/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "bbs")) {
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extB^fraud_expo, fraud_width))
                   moved_votes <- as.integer(non_voters[fraud_ids] * share_moved)
                   votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes  
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedB <- n_fraudedB + sum(moved_votes)
                 }           
                 
                 # vote stealing
-                if (fraud_type == "stealing") {
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "stealing")) {
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extB^fraud_expo, fraud_width))
                   moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes  
                   non_voters <- eligible - votes_a - votes_b
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedB <- n_fraudedB + sum(moved_votes)
                 }
                 # vote switching
-                if (fraud_type == "switching") { 
-                  share_moved <- 1 - abs(rnorm(length(fraud_ids), 0, sd(votes_a/eligible)))
+                if (str_detect(paste(fraud_type, collapse = " "), "switching")) { 
+                  share_moved <- 1 - abs(rnorm(length(fraud_ids), fraud_extB^fraud_expo, fraud_width))
                   moved_votes <- as.integer(votes_a[fraud_ids] * share_moved)
                   votes_a[fraud_ids] <- votes_a[fraud_ids] - moved_votes
                   votes_b[fraud_ids] <- votes_b[fraud_ids] + moved_votes
-                  n_frauded <- n_frauded + sum(moved_votes)
+                  n_fraudedB <- n_fraudedB + sum(moved_votes)
                 }
                 
               } # end if (fraud_extB > 0)
@@ -293,27 +305,38 @@
             shareB <- votes_b/votes_all
             shareB[which(shareB > 1)] <- 1
             non_voters <- eligible - votes_all
+            n_fraudedAll <- n_fraudedA + n_fraudedB
             
             
             #' -----------------------------------------------------------
-            # rounding votes
-            if (!is.na(fraud_round)) {
+            # rounding votes in favor of partyA or partyB
+            if (fraud_roundA | fraud_roundB) {
             #' -----------------------------------------------------------
             
               # round in favor of partyA
-              if (fraud_round == "A") {  
-                fraud_ids <- sample(which(shareA > 0.5 & shareA < 1 ), length(shareA) * share_round)
-                shareA[fraud_ids] <- ceiling(shareA[fraud_ids] / 0.05) * 0.05 # if it should just be rounded up, then use ceiling instead of round
+              if (fraud_roundA) {  
+                fraud_ids <- sample(which(shareA > 0.5 & shareA < 1 ), length(shareA) * share_roundA)
+                shareA[fraud_ids] <- ceiling(shareA[fraud_ids] / 0.05) * 0.05 
+                
+                # redefine affected variables
+                votes_a[fraud_ids] <- as.integer(votes_all[fraud_ids] * shareA[fraud_ids])
+                votes_b <- votes_all - votes_a
+                shareB[fraud_ids] <- 1-shareA[fraud_ids]
               }
               
-              # redefine affected variables
-              votes_a[fraud_ids] <- as.integer(votes_all[fraud_ids] * shareA[fraud_ids])
-              votes_b <- votes_all - votes_a
-              shareB[fraud_ids] <- 1-shareA[fraud_ids]
+              # round in favor of partyB
+              if (fraud_roundB) {  
+                fraud_ids <- sample(which(shareB > 0.5 & shareB < 1 ), length(shareB) * share_roundB)
+                shareB[fraud_ids] <- ceiling(shareB[fraud_ids] / 0.05) * 0.05 
+                
+                # redefine affected variables
+                votes_b[fraud_ids] <- as.integer(votes_all[fraud_ids] * shareB[fraud_ids])
+                votes_a <- votes_all - votes_b
+                shareA[fraud_ids] <- 1-shareB[fraud_ids]
+              }
               
-            }
+            } # end if (fraud_roundA | fraud_roundB)
           
-            
           } # end if fraud_type != "clean"
           
           
@@ -387,11 +410,15 @@
               data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
               
               # fraud variables (y) 
-              data_char$fraud <- n_frauded
+              data_char$fraud <- n_fraudedAll
               data_char$fraud[data_char$fraud > 0] <- 1
               data_char$fraud_type = fraud_type
-              data_char$n_frauded <- n_frauded
-              data_char$perc_frauded <- n_frauded / sum(votes_all)
+              data_char$n_fraudedA <- n_fraudedA
+              data_char$n_fraudedB <- n_fraudedB
+              data_char$n_fraudedAll <- n_fraudedAll
+              data_char$perc_fraudedA <- n_fraudedA / sum(votes_all)
+              data_char$perc_fraudedB <- n_fraudedB / sum(votes_all)
+              data_char$perc_fraudedAll <- n_fraudedAll / sum(votes_all)
               data_char$fraud_incA <- fraud_incA
               data_char$fraud_extA <- fraud_extA
               data_char$fraud_incB <- fraud_incB
@@ -414,7 +441,7 @@
           data_yX <- rbind(data_yX, data_yX[rep(1, (n_elections-1)),])
         
           # add nuisance parameter
-          data_yX[,9:ncol(data_yX)] <- apply(data_yX[,9:ncol(data_yX)], MARGIN = 2, rnorm, n = n_elections, sd = nuisance)
+          data_yX[,13:ncol(data_yX)] <- apply(data_yX[,13:ncol(data_yX)], MARGIN = 2, rnorm, n = n_elections, sd = nuisance)
           data_final <- data_yX  
             
     # return list of generated elections      
