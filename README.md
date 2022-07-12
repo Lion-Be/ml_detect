@@ -18,3 +18,16 @@ There is a range of statistical approaches available to separate anomalies from 
 :heavy_check_mark: I train supervised machine learning models on a multivariate feature space. This weights heterogeneous numerical approaches for fraud detection against each other
 
 :heavy_check_mark: Unified statistical framework for probabilistic election fraud detection synthesizing multiple standalone tests with each other
+
+## :microscope: How does fraudulent election data look like?
+
+### 1. Spikes in the density mass of vote share distributions
+- We can construct a distribution of vote shares for one candidate/party across a large number of units (e.g. polling stations) 
+- In clean elections, distributions are relatively smooth with no systematic spikes
+- Systematically *rounding up* vote shares for one candidate/party during vote counting leads to spikes in the density mass around *exactly integer values* that are multiples of 5 (e.g. 55%, 60%, 65%, 70%, ...)
+
+<p float="left">
+  <img src="spikes_clean.pdf" width="300" />
+  <img src="spikes_fraud.pdf" width="330" /> 
+  <img src="spikes_fraud_cop2.pdf" width="330" /> 
+</p>
