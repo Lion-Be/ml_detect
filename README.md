@@ -27,7 +27,7 @@ There is a range of statistical approaches available to separate anomalies from 
 - Systematically *rounding up* vote shares for one candidate/party during vote counting leads to spikes in the density mass around *exactly integer values* that are multiples of 5 (e.g. 55%, 60%, 65%, 70%, ...)
 
 <p float="left">
-  <img src="spikes_clean.pdf" width="300" />
-  <img src="spikes_fraud.pdf" width="330" /> 
-  <img src="spikes_fraud_cop2.pdf" width="330" /> 
+  <img src="spikes_clean.png" width="300" />
+  <img src="spikes_fraud.png" width="300" /> 
+  <img src="spikes_fraud_zoom.png" width="150" /> 
 </p>
