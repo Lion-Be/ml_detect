@@ -59,7 +59,7 @@ $$P(d) = \sum_{k=10^{n-2}}^{10^{n-1}} log_{10} (1+\frac{1}{10k+d}).$$
 ## :construction_worker: How to use it
 The machine learning approach to fraud detection is bound into a single R function. The user provides the data, specifies all variables used for feature engineering, defines the setup for generating synthetic training data, and the ML algorithms that are used. The function 
 - simulates synthetic clean and frauded data that mimics relevant characteristics of empirical data provided
-- trains ML algorithms on synthetic data that learn to distinguish these and estimate the level of fraud
+- trains ML algorithms on synthetic data that learn to distinguish clean from frauded elections and estimate the level of fraud
 - re-applies trained models on the empirical data that is provided and produces estimates of the extent of systematic manipulation
 
 ```r
