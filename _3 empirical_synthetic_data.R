@@ -15,7 +15,7 @@
     # empirical
     #' ------------------------
     
-      ven04 <- read_excel("U:/PhD Electoral Fraud/Data/Venezuela/2004_referendum_revocatorio/referendum.xls",
+      ven04 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Venezuela/2004_referendum_revocatorio/referendum.xls",
                           skip = 34)
       ven04 <- as.data.frame(ven04)
       # rrp_si = number of yes votes
@@ -69,8 +69,8 @@
     # empirical
     #' ------------------------
     
-      ru11_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2011_1of2.xls")
-      ru11_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2011_2of2.xls")
+      ru11_1 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Russia2011_1of2.xls")
+      ru11_2 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Russia2011_2of2.xls")
       ru11 <- as.data.frame(rbind(ru11_1, ru11_2))
       ru11$votes_all <- ru11$`Number of valid ballots` + as.numeric(ru11$`Number of invalid ballots`)
       ru11$turnout <- ru11$votes_all / ru11$`Number of voters included in voters list` 
@@ -105,8 +105,8 @@
                            fraud_incA = 0.32,
                            fraud_extA = 0.10,
                            fraud_expo = 1.5,
-                           fraud_round = "A", 
-                           share_round = 0.01,
+                           fraud_roundA = T, 
+                           share_roundA = 0.01,
                            n_elections = 1, 
                            data_type = "full", 
                            shareA_emp = ru11$share_ur,
@@ -122,8 +122,8 @@
     # empirical
     #' ------------------------
     
-      ru12_1 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_1of2.xls")
-      ru12_2 <- read_excel("U:/PhD Electoral Fraud/Data/Russia2012_2of2.xls")
+      ru12_1 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Russia2012_1of2.xls")
+      ru12_2 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Russia2012_2of2.xls")
       ru12 <- as.data.frame(rbind(ru12_1, ru12_2))
       ru12$`Number of invalid ballots`[which(ru12$`Number of invalid ballots`=="A")] <- 0
       ru12$votes_all <- ru12$`Number of valid ballots` + as.numeric(ru12$`Number of invalid ballots`)
@@ -177,7 +177,7 @@
     # empirical
     #' ------------------------
     
-      uga11 <- read_excel("U:/PhD Electoral Fraud/Data/Uganda2011.xls", col_names = F)
+      uga11 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Uganda2011.xls", col_names = F)
       uga11 <- as.data.frame(uga11)
       uga11$eligible <- uga11$...11
       
@@ -242,7 +242,7 @@
     # empirical
     #' ------------------------
     
-      aus08 <- read_excel("U:/PhD Electoral Fraud/Data/Austria2008_adjusted.xls")
+      aus08 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Austria2008_adjusted.xls")
       aus08 <- as.data.frame(aus08)
       aus08$turnout <- aus08$`Wahl-\nbeteil-\nigung\nin %` / 100
       aus08$eligible <- aus08$`Wahlbe- \nrechtigte`
@@ -268,7 +268,7 @@
       # generate synthetic data using these values
       aus08_syn <- gen_data(n_entities = nrow(aus08),
                             eligible = aus08$eligible,
-                            fraud_type = "bbs",
+                            fraud_type = c("bbs", "switching"),
                             fraud_incA = 0.6,
                             fraud_extA = 0.2,
                             fraud_incB = 0, 
@@ -292,7 +292,7 @@
     # empirical
     #' ------------------------
     
-      esp19 <- read_excel("U:/PhD Electoral Fraud/Data/Spain_EP_2019.xlsx", skip = 5)
+      esp19 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Spain_EP_2019.xlsx", skip = 5)
       esp19 <- as.data.frame(esp19)
       esp19$turnout <- esp19$`Total votantes` / esp19$`Total censo electoral` 
       esp19$eligible <- esp19$`Total votantes`
@@ -334,7 +334,7 @@
     # empirical
     #' ------------------------
     
-      fin17 <- read_excel("U:/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
+      fin17 <- read_excel("C:/Users/lionb/OneDrive/Desktop/lbehrens/PhD Electoral Fraud/Data/Finland_municipal_2017.xlsx")
       fin17 <- as.data.frame(fin17)
       
       fin17$`Persons entitled to vote` <- as.numeric(fin17$`Persons entitled to vote`)

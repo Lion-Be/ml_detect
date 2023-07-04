@@ -3,8 +3,8 @@
 #' ----------------------------- 
 
 #' install and load packages
-packages <- c("MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
-              "stringr", "dplyr", "readxl", "tikzDevice", "distantia", "doSNOW", 
+packages <- c("dplyr", "MASS", "gaussDiff", "RColorBrewer", "truncnorm", "e1071", 
+              "stringr", "readxl", "tikzDevice", "distantia", "doSNOW", "varImp",
               "caret", "glmnet", "class", "randomForest", "xgboost", "LaplacesDemon")
 
 for (i in 1: length(packages)) {
@@ -131,30 +131,30 @@ gen_features <- function(votes_a, votes_b, turnout, share_A, share_B, eligible) 
   data_char$bl2_meanA <- mean(extract_digit(votes_a, 2), na.rm=T) # party A, mean second digit
   data_char$bl2_meanB <- mean(extract_digit(votes_b, 2), na.rm=T) # party B, mean second digit
   data_char$bl2_chi2A <- benford_chi2(votes_a, 2) # party A, chi2 statistic between observed and expected shares in second digit
-  data_char$bl2_chi2B <- benford_chi2(votes_b, 2) # party B, chi2 statistic between observed and expected shares in second digit 
-  
+  data_char$bl2_chi2B <- benford_chi2(votes_b, 2) # party B, chi2 statistic between observed and expected shares in second digit
+
   # last digit
-  data_char$bllast_frac1A <- length(which(extract_digit(votes_a, "last") == 1)) / length(votes_a) # partyA, fraction of '1' among last digit
-  data_char$bllast_frac1B <- length(which(extract_digit(votes_b, "last") == 1)) / length(votes_b) # partyB, fraction of '1' among last digit
-  data_char$bllast_meanA <- mean(extract_digit(votes_a, "last")) # party A, mean last digit
-  data_char$bllast_meanB <- mean(extract_digit(votes_b, "last")) # party B, mean last digit
-  data_char$bllast_chi2A <- benford_chi2(votes_a, "last") # party A, chi2 statistic between observed and expected shares in last digit 
-  data_char$bllast_chi2B <- benford_chi2(votes_b, "last") # party B, chi2 statistic between observed and expected shares in last digit 
-  
+   data_char$bllast_frac1A <- length(which(extract_digit(votes_a, "last") == 1)) / length(votes_a) # partyA, fraction of '1' among last digit
+   data_char$bllast_frac1B <- length(which(extract_digit(votes_b, "last") == 1)) / length(votes_b) # partyB, fraction of '1' among last digit
+   data_char$bllast_meanA <- mean(extract_digit(votes_a, "last")) # party A, mean last digit
+   data_char$bllast_meanB <- mean(extract_digit(votes_b, "last")) # party B, mean last digit
+   data_char$bllast_chi2A <- benford_chi2(votes_a, "last") # party A, chi2 statistic between observed and expected shares in last digit 
+   data_char$bllast_chi2B <- benford_chi2(votes_b, "last") # party B, chi2 statistic between observed and expected shares in last digit 
+  # 
   # characteristics of raw turnout distribution 
   turnout[which(turnout <= 0)] <- 0.001
   turnout[which(turnout > 1)] <- 1
-  #data_char$turnout_skew <- e1071::skewness(turnout)
-  #data_char$turnout_kurt <- kurtosis(turnout)
-  #data_char$turnout_kurt80 <- kurtosis(turnout[which(turnout>0.8)])
+  data_char$turnout_skew <- e1071::skewness(turnout)
+  data_char$turnout_kurt <- kurtosis(turnout)
+  data_char$turnout_kurt80 <- kurtosis(turnout[which(turnout>0.8)])
   data_char$turnout_normdist <- LaplacesDemon::KLD(turnout, rnorm(length(turnout), mean(turnout), sd(turnout)))$mean.sum.KLD
   
   # characteristics of logarithmic turnout rate
-  #log_turnout_rate <- log(turnout / (eligible - turnout))
-  #data_char$logturnout_skew <- e1071::skewness(log_turnout_rate)
-  #data_char$logturnout_kurt <- kurtosis(log_turnout_rate)
-  #data_char$logturnout_sd <- sd(log_turnout_rate)
-  #data_char$logturnout_normdist <- LaplacesDemon::KLD(log_turnout_rate, rnorm(length(log_turnout_rate), mean(log_turnout_rate), sd(log_turnout_rate)))$mean.sum.KLD
+  log_turnout_rate <- log(turnout / (eligible - turnout))
+  data_char$logturnout_skew <- e1071::skewness(log_turnout_rate)
+  data_char$logturnout_kurt <- kurtosis(log_turnout_rate)
+  data_char$logturnout_sd <- sd(log_turnout_rate)
+  data_char$logturnout_normdist <- LaplacesDemon::KLD(log_turnout_rate, rnorm(length(log_turnout_rate), mean(log_turnout_rate), sd(log_turnout_rate)))$mean.sum.KLD
   
   # characteristics of vote shares 
   share_A[which(share_A <= 0)] <- 0.001
@@ -164,35 +164,35 @@ gen_features <- function(votes_a, votes_b, turnout, share_A, share_B, eligible) 
   share_B[which(share_B > 1)] <- 1
   
   data_char$shareA_normdist <- LaplacesDemon::KLD(share_A, rnorm(length(share_A), mean(share_A), sd(share_A)))$mean.sum.KLD
-  #data_char$shareB_normdist <- LaplacesDemon::KLD(share_A, rnorm(length(share_A), mean(share_A), sd(share_A)))$mean.sum.KLD
+  data_char$shareB_normdist <- LaplacesDemon::KLD(share_A, rnorm(length(share_A), mean(share_A), sd(share_A)))$mean.sum.KLD
   
   #data_char$shareA_kurt <- kurtosis(share_A)
-  #data_char$shareA_kurt80 <- kurtosis(share_A[which(share_A>0.8)])
+  data_char$shareA_kurt80 <- kurtosis(share_A[which(share_A>0.8)])
   
   #data_char$shareB_kurt <- kurtosis(share_B)
-  #data_char$shareB_kurt80 <- kurtosis(share_B[which(share_B>0.8)])
+  data_char$shareB_kurt80 <- kurtosis(share_B[which(share_B>0.8)])
   
   # characteristics of logarithmic vote share rates
-  #log_shareA_rate <- log(share_A / (eligible - share_A))
-  #data_char$logshareA_skew <- e1071::skewness(log_shareA_rate)
-  #data_char$logshareA_kurt <- kurtosis(log_shareA_rate)
-  #data_char$logshareA_sd <- sd(log_shareA_rate)
-  #data_char$logshareA_normdist <- LaplacesDemon::KLD(log_shareA_rate, rnorm(length(log_shareA_rate), mean(log_shareA_rate), sd(log_shareA_rate)))$mean.sum.KLD
+  log_shareA_rate <- log(share_A / (eligible - share_A))
+  data_char$logshareA_skew <- e1071::skewness(log_shareA_rate)
+  data_char$logshareA_kurt <- kurtosis(log_shareA_rate)
+  data_char$logshareA_sd <- sd(log_shareA_rate)
+  data_char$logshareA_normdist <- LaplacesDemon::KLD(log_shareA_rate, rnorm(length(log_shareA_rate), mean(log_shareA_rate), sd(log_shareA_rate)))$mean.sum.KLD
   
-  #log_shareB_rate <- log(share_B / (eligible - share_B))
-  #data_char$logshareB_skew <- e1071::skewness(log_shareB_rate)
-  #data_char$logshareB_kurt <- kurtosis(log_shareB_rate)
-  #data_char$logshareB_sd <- sd(log_shareB_rate)
-  #data_char$logshareB_normdist <- LaplacesDemon::KLD(log_shareB_rate, rnorm(length(log_shareB_rate), mean(log_shareB_rate), sd(log_shareB_rate)))$mean.sum.KLD
+  log_shareB_rate <- log(share_B / (eligible - share_B))
+  data_char$logshareB_skew <- e1071::skewness(log_shareB_rate)
+  data_char$logshareB_kurt <- kurtosis(log_shareB_rate)
+  data_char$logshareB_sd <- sd(log_shareB_rate)
+  data_char$logshareB_normdist <- LaplacesDemon::KLD(log_shareB_rate, rnorm(length(log_shareB_rate), mean(log_shareB_rate), sd(log_shareB_rate)))$mean.sum.KLD
   
   # share of entities with turnout & shareA > x
-  #data_char$turn_shareA_90 <- length(which(turnout > 0.9 & share_A > 0.9)) / length(turnout)
-  #data_char$turn_shareA_91 <- length(which(turnout > 0.91 & share_A > 0.91)) / length(turnout)
-  #data_char$turn_shareA_92 <- length(which(turnout > 0.92 & share_A > 0.92)) / length(turnout)
-  #data_char$turn_shareA_93 <- length(which(turnout > 0.93 & share_A > 0.93)) / length(turnout)
-  #data_char$turn_shareA_94 <- length(which(turnout > 0.94 & share_A > 0.94)) / length(turnout)
-  #data_char$turn_shareA_95 <- length(which(turnout > 0.95 & share_A > 0.95)) / length(turnout)
-  #data_char$turn_shareA_96 <- length(which(turnout > 0.96 & share_A > 0.96)) / length(turnout)
+  data_char$turn_shareA_90 <- length(which(turnout > 0.9 & share_A > 0.9)) / length(turnout)
+  data_char$turn_shareA_91 <- length(which(turnout > 0.91 & share_A > 0.91)) / length(turnout)
+  data_char$turn_shareA_92 <- length(which(turnout > 0.92 & share_A > 0.92)) / length(turnout)
+  data_char$turn_shareA_93 <- length(which(turnout > 0.93 & share_A > 0.93)) / length(turnout)
+  data_char$turn_shareA_94 <- length(which(turnout > 0.94 & share_A > 0.94)) / length(turnout)
+  data_char$turn_shareA_95 <- length(which(turnout > 0.95 & share_A > 0.95)) / length(turnout)
+  data_char$turn_shareA_96 <- length(which(turnout > 0.96 & share_A > 0.96)) / length(turnout)
   data_char$turn_shareA_97 <- length(which(turnout > 0.97 & share_A > 0.97)) / length(turnout)
   data_char$turn_shareA_98 <- length(which(turnout > 0.98 & share_A > 0.98)) / length(turnout)
   data_char$turn_shareA_99 <- length(which(turnout > 0.99 & share_A > 0.99)) / length(turnout)

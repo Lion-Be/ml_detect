@@ -10,10 +10,12 @@
                        fraud_roundA = F, share_roundA = NA, 
                        fraud_roundB = F, share_roundB = NA, 
                        agg_factor = 1, n_elections = 100, 
-                       data_type = "full", nuisance = 0.01, 
+                       data_type = "full", nuisance = 0.05, 
                        turnout_emp=NA, shareA_emp=NA, 
                        turnout=NA, shareA=NA, optimize_only = F) {  
     
+    tryCatch({
+      
     # n_entities = number of entities to create data for
     # eligible = number of eligible voters per entitiy
     # fraud_type = type of fraud (clean, bbs, stealing, switching), can be multiple
@@ -310,7 +312,7 @@
             
             #' -----------------------------------------------------------
             # rounding votes in favor of partyA or partyB
-            if (fraud_roundA | fraud_roundB) {
+            if ((fraud_roundA == T) & (share_roundA > 0)) {
             #' -----------------------------------------------------------
             
               # round in favor of partyA
@@ -399,6 +401,11 @@
               if (n_elections > 1)
                 print(str_c("n_elections = ", n_elections, " but full data is generated for only one election."))
               
+              ifelse(fraud_type[1] == "clean",
+                     data$perc_fraudedAll <- 0,
+                     data$perc_fraudedAll <- n_fraudedAll / sum(votes_all)
+                     )
+              
               data_final <- data
               return(data_final)
               break
@@ -410,19 +417,33 @@
               data_char <- as.data.frame(matrix(NA, nrow=1, ncol=0))
               
               # fraud variables (y) 
-              data_char$fraud <- n_fraudedAll
+              ifelse(fraud_type[1] == "clean",
+                     data_char$fraud <- 0,
+                     data_char$fraud <- n_fraudedAll)
               data_char$fraud[data_char$fraud > 0] <- 1
               data_char$fraud_type = fraud_type
               data_char$n_fraudedA <- n_fraudedA
               data_char$n_fraudedB <- n_fraudedB
-              data_char$n_fraudedAll <- n_fraudedAll
+              ifelse(fraud_type[1] == "clean",
+                     data_char$n_fraudedAll <- 0,
+                     data_char$n_fraudedAll <- n_fraudedAll)
               data_char$perc_fraudedA <- n_fraudedA / sum(votes_all)
               data_char$perc_fraudedB <- n_fraudedB / sum(votes_all)
-              data_char$perc_fraudedAll <- n_fraudedAll / sum(votes_all)
-              data_char$fraud_incA <- fraud_incA
-              data_char$fraud_extA <- fraud_extA
-              data_char$fraud_incB <- fraud_incB
-              data_char$fraud_extB <- fraud_extB
+              ifelse(fraud_type[1] == "clean",
+                     data_char$perc_fraudedAll <- 0,
+                     data_char$perc_fraudedAll <- n_fraudedAll / sum(votes_all))
+              ifelse(fraud_type[1] == "clean",
+                     data_char$fraud_incA <- 0,
+                     data_char$fraud_incA <- fraud_incA)
+              ifelse(fraud_type[1] == "clean",
+                     data_char$fraud_extA <- 0,
+                     data_char$fraud_extA <- fraud_extA)
+              ifelse(fraud_type[1] == "clean",
+                     data_char$fraud_incB <- 0,
+                     data_char$fraud_incB <- fraud_incB)
+              ifelse(fraud_type[1] == "clean",
+                     data_char$fraud_extB <- 0,
+                     data_char$fraud_extB <- fraud_extB)
               
               # numerical characteristics (X)
               data_charX <- gen_features(votes_a = data$votes_a, votes_b = data$votes_b, turnout = data$turnout, 
@@ -447,5 +468,10 @@
     # return list of generated elections      
     return(data_final)
     
+    }, error = function(e){
+      
+   
+      
+    }) # end tryCatch
         
   } # end function gen_data

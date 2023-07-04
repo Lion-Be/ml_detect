@@ -3,13 +3,16 @@
 #' function to apply ML approach to single case
 #' --------------------------------------------
 
-ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$SPÖ, 
+ml_detect <- function(data = aus08, data_name = "aus08", eligible = aus08$eligible, votes_a = aus08$SPÖ, 
                       votes_b = aus08$ÖVP, turnout_emp = aus08$turnout, shareA_emp = aus08$share_spo, 
                       shareB_emp = aus08$share_ovp, fraud_incA = seq(0.01, 0.50, 0.01), 
                       fraud_extA = seq(0.01, 0.1, 0.01),
-                      fraud_types = c("bbs", "stealing", "switching"),
+                      fraud_types = c("bbs", "stealing", "switching", "rounding"),
+                      share_roundA = seq(0.01, 0.05, 0.01),
                       n_elections = 1, models = c("kNN", "regul_reg", "randomForest", "gradBoost"), 
                       ml_task = c("binary", "cat", "cont"), seed=12345, parallel = T) {
+  
+  tryCatch({
   
   # data = data of empirical case 
   # eligible = vector of eligible voters across entities of empirical case
@@ -58,10 +61,25 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
   #  (i) construct artifical data -------
   #' ------------------------------------
   
-    # define fraud scenarios that models are trained on 
-    fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, fraud_types))
-    colnames(fraud_scenarios) <- c("fraud_incA", "fraud_extA", "type")
-    
+    # define fraud scenarios that models are trained on (different fraud types are kept separate)
+   # if(is.element("rounding", fraud_types)) {
+   #   fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, fraud_types[-which(fraud_types=="rounding")], share_roundA))
+   #   colnames(fraud_scenarios) <- c("fraud_incA", "fraud_extA", "inc_ext_type", "rounding_perc")
+   #  } else {
+   #   fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, fraud_types))
+   #   colnames(fraud_scenarios) <- c("fraud_incA", "fraud_extA", "inc_ext_type")
+   # }
+  
+  # define fraud scenarios that models are trained on (execute different fraud types one after another) 
+  if(is.element("rounding", fraud_types)) {
+    fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, str_flatten_comma(fraud_types[-which(fraud_types=="rounding")]), share_roundA))
+    colnames(fraud_scenarios) <- c("fraud_incA", "fraud_extA", "inc_ext_type", "rounding_perc")
+  } else {
+    fraud_scenarios <- as.data.frame(expand.grid(fraud_incA, fraud_extA, str_flatten_comma(fraud_types)))
+    colnames(fraud_scenarios) <- c("fraud_incA", "fraud_extA", "inc_ext_type")
+  }
+  
+  
     # optimize for turnout, shareA
     opt_vecs <- gen_data(n_entities = nrow(data), 
                          eligible = eligible,
@@ -76,11 +94,13 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
       
       output <- gen_data(n_entities = nrow(data), 
                          eligible = eligible,
-                         fraud_type = fraud_scenarios[scenario, "type"],
+                         fraud_type = fraud_scenarios[scenario, "inc_ext_type"],
                          fraud_incA = fraud_scenarios[scenario, "fraud_incA"],
                          fraud_extA = fraud_scenarios[scenario, "fraud_extA"],
                          fraud_incB = 0,
                          fraud_extB = 0,
+                         fraud_roundA = T, # only works if rounding fraud is committed
+                         share_roundA = fraud_scenarios[scenario, "rounding_perc"], 
                          fraud_expo = 1.5,
                          agg_factor = 1, 
                          n_elections = n_elections,
@@ -97,6 +117,7 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
       
       if (scenario %% 100 == 0) 
         print(str_c("generating synthetic data: fraud scenario ", scenario, " out of ", nrow(fraud_scenarios), " simulated, ", Sys.time()))
+       
       
     } # end for scenario in 1:nrow(scenarios)
     
@@ -113,12 +134,31 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
                                 shareA = opt_vecs$shareA
     )
     
-    sim_elections <- rbind(sim_elections, clean_elections)
+    if (length(colnames(clean_elections)[colSums(is.na(clean_elections)) > 0]) > 0) {
+      sim_elections <- sim_elections[,-which(colSums(is.na(clean_elections)) > 0)]
+      clean_elections <- clean_elections[,-which(colSums(is.na(clean_elections)) > 0)]
+    }
     
+    sim_elections <- rbind(sim_elections, clean_elections)
+    if (scenario %% 100 == 0) 
+      save(sim_elections, file=str_c("sim_elections_", data_name, ".RData"))
   #' ----------------------------
   #  (ii) train ML models -------
   #' ----------------------------
   
+    # generate feature matrix for empirical data
+    X_emp <- gen_features(votes_a, votes_b, turnout_emp, shareA_emp, shareB_emp, eligible)
+    
+    # drop features that either have missings in sim_elections or X_emp
+    ### missings in sim_elections
+    X_emp <- X_emp[,colnames(sim_elections)[13:ncol(sim_elections)]]
+    
+    ### missings in X_emp
+    if (length(colnames(X_emp)[colSums(is.na(X_emp)) > 0]) > 0) {
+      sim_elections <- sim_elections[,-(12+which(colSums(is.na(X_emp)) > 0))]
+      X_emp <- X_emp[,-which(colSums(is.na(X_emp)) > 0)]
+    }
+    
     # split data into training set (used for cross-validation) and final test set (untouched)
     # stratify over y-proportions (mechanisms), 80/20 split
     train_id <- createDataPartition(sim_elections$fraud_type,
@@ -142,19 +182,17 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
     rownames(predictions) <- c("kNN", "ridge", "lasso", "randomForest", "gradBoost")
     colnames(predictions) <- c("binary", "p(fraud|X)", "categorical", "p(bbs|X)", "p(stealing|X)", 
                                "p(switching|X)", "p(clean|X)", "perc_frauded", "sd(yhat-y)")
-    X_emp <- gen_features(votes_a, votes_b, turnout_emp, shareA_emp, shareB_emp, eligible)
     
     # define variables
-    X_train <- model.matrix(fraud ~., train[,-c(2:8)])[,-1]
-    X_test <- model.matrix(fraud ~., test[,-c(2:8)])[,-1]
-    
+    X_train <- model.matrix(fraud ~., train[,-c(2:12)])[,-1]
+    X_test <- model.matrix(fraud ~., test[,-c(2:12)])[,-1]
     
     y_train_binary <- as.factor(train$fraud)
     y_test_binary <- as.factor(test$fraud)
     y_train_cat <- as.factor(train$fraud_type)
     y_test_cat <- as.factor(test$fraud_type)
-    y_train_cont <- train$perc_frauded
-    y_test_cont <- test$perc_frauded
+    y_train_cont <- train$perc_fraudedAll
+    y_test_cont <- test$perc_fraudedAll
     
     # define trControl settings that are agnostic to the specific method
     tr_settings <- trainControl(method = "cv", 
@@ -532,6 +570,12 @@ ml_detect <- function(data = aus08, eligible = aus08$eligible, votes_a = aus08$S
                      "final models" = final_models, 
                      "simulated elections" = sim_elections)
     return(out_list)
-  
+    
+  }, error = function(e){
+    
+    
+    
+  }) # end tryCatch
+    
 }
 
